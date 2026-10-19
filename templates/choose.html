@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#f7f2fb">
+
+    <title>CerviAI | Dashboard</title>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --purple: #7546a0;
+            --purple-dark: #52316f;
+            --purple-light: #eee5f6;
+            --lavender-bg: #f8f5fb;
+            --text-dark: #30223a;
+            --text-muted: #817589;
+            --border: #e9dfef;
+            --white: #ffffff;
+        }
+
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            background: var(--lavender-bg);
+            color: var(--text-dark);
+            min-height: 100vh;
+        }
+
+        a {
+            text-decoration: none;
+        }
+
+        /* Navigation bar */
+
+        .navbar {
+            min-height: 76px;
+            padding: 0 7%;
+            background: var(--white);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+        }
+
+        .logo {
+text-decoration: none;
+font-size: 25px;
+font-weight: 700;
+color: #261b35;
+display: flex;
+align-items: center;
+gap: 7px;
+}
+
+.logo span:last-child {
+color: #7b4bb7;
+}
+
+.logo-mark {
+width: 31px;
+height: 31px;
+border-radius: 9px;
+background: #7b4bb7;
+color: white;
+display: inline-flex;
+align-items: center;
+justify-content: center;
+font-size: 17px;
+}
+
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+        }
+
+        .home-link {
+            color: #62546c;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .home-link:hover {
+            color: var(--purple);
+        }
+
+        .logout-btn {
+            display: inline-block;
+            background: var(--purple);
+            color: var(--white);
+            padding: 11px 20px;
+            border-radius: 9px;
+            font-size: 13px;
+            font-weight: 700;
+            transition: background 0.2s ease;
+        }
+
+        .logout-btn:hover {
+            background: var(--purple-dark);
+        }
+
+        /* Main dashboard */
+
+        .dashboard {
+            width: 86%;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 48px 0 30px;
+        }
+
+        .welcome-section {
+            margin-bottom: 32px;
+        }
+
+        .small-title {
+            color: var(--purple);
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 1.8px;
+            margin-bottom: 16px;
+        }
+
+        .welcome-section h1 {
+            font-size: clamp(30px, 4vw, 43px);
+            line-height: 1.25;
+            letter-spacing: -1px;
+            margin-bottom: 13px;
+        }
+
+        .welcome-section h1 span,
+        .info-content h2 span {
+            color: var(--purple);
+        }
+
+        .welcome-section p {
+            color: var(--text-muted);
+            max-width: 680px;
+            font-size: 15px;
+            line-height: 1.8;
+        }
+
+        /* Health notice */
+
+        .health-notice {
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            padding: 19px 22px;
+            background: #f0e8f8;
+            border: 1px solid #e5d7f0;
+            border-radius: 13px;
+            margin-bottom: 38px;
+        }
+
+        .notice-icon {
+            flex-shrink: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 50%;
+            background: #dfcbed;
+            color: var(--purple-dark);
+            font-weight: 800;
+        }
+
+        .notice-text strong {
+            display: block;
+            color: var(--purple-dark);
+            font-size: 14px;
+            margin-bottom: 6px;
+        }
+
+        .notice-text p {
+            color: #71627b;
+            font-size: 13px;
+            line-height: 1.7;
+        }
+
+        /* Section headings */
+
+        .section-heading {
+            margin-bottom: 21px;
+        }
+
+        .section-heading h2 {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+
+        .section-heading p {
+            color: var(--text-muted);
+            font-size: 14px;
+            line-height: 1.7;
+        }
+
+        /* Feature cards */
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 22px;
+        }
+
+        .dashboard-card {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            min-width: 0;
+            min-height: 335px;
+            padding: 27px;
+            background: var(--white);
+            border: 1px solid var(--border);
+            border-radius: 17px;
+            box-shadow: 0 6px 22px rgba(65, 38, 81, 0.035);
+            transition: transform 0.2s ease,
+                        box-shadow 0.2s ease;
+        }
+
+        .dashboard-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 28px rgba(65, 38, 81, 0.08);
+        }
+
+        .card-icon {
+            width: 52px;
+            height: 52px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--purple-light);
+            color: var(--purple);
+            border-radius: 14px;
+            font-size: 26px;
+            margin-bottom: 20px;
+        }
+
+        .card-number {
+            position: absolute;
+            top: 30px;
+            right: 28px;
+            color: #c9b7d9;
+            font-size: 14px;
+            font-weight: 800;
+            letter-spacing: 1px;
+        }
+
+        .dashboard-card h2 {
+            font-size: 20px;
+            line-height: 1.4;
+            margin-bottom: 11px;
+            color: var(--text-dark);
+        }
+
+        .dashboard-card p {
+            color: var(--text-muted);
+            font-size: 13px;
+            line-height: 1.8;
+            margin-bottom: 23px;
+        }
+
+        .card-button {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            width: 100%;
+            margin-top: auto;
+            padding: 13px 16px;
+            background: var(--purple);
+            border: 1px solid var(--purple);
+            color: var(--white);
+            border-radius: 9px;
+            font-size: 13px;
+            font-weight: 700;
+            transition: background 0.2s ease;
+        }
+
+        .card-button:hover {
+            background: var(--purple-dark);
+            border-color: var(--purple-dark);
+        }
+
+        .card-button span {
+            font-size: 18px;
+        }
+
+        .card-button.secondary {
+            background: var(--white);
+            color: var(--purple);
+        }
+
+        .card-button.secondary:hover {
+            background: var(--purple-light);
+        }
+
+        /* Information section */
+
+        .information-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 35px;
+            align-items: center;
+            padding: 30px;
+            margin-top: 34px;
+            background: var(--white);
+            border: 1px solid var(--border);
+            border-radius: 17px;
+        }
+
+        .info-content h2 {
+            font-size: 26px;
+            line-height: 1.45;
+            margin-bottom: 13px;
+        }
+
+        .info-content p {
+            color: var(--text-muted);
+            font-size: 13px;
+            line-height: 1.9;
+        }
+
+        .info-items {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .info-item {
+            display: flex;
+            align-items: center;
+            gap: 13px;
+            font-size: 13px;
+            color: #62556c;
+        }
+
+        .info-item strong {
+            width: 32px;
+            height: 32px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 9px;
+            background: var(--purple-light);
+            color: var(--purple);
+            font-size: 11px;
+        }
+
+        /* Footer */
+
+        .medical-note {
+            text-align: center;
+            color: #897c91;
+            font-size: 12px;
+            line-height: 1.8;
+            padding: 28px 10px 12px;
+        }
+
+        .medical-note strong {
+            color: #6c567a;
+        }
+
+        /* Responsive layout */
+
+        @media (max-width: 760px) {
+            .navbar {
+                padding: 15px 5%;
+                min-height: 68px;
+            }
+
+            .logo {
+                font-size: 20px;
+            }
+
+            .nav-right {
+                gap: 12px;
+            }
+
+            .home-link {
+                display: none;
+            }
+
+            .dashboard {
+                width: 90%;
+                padding-top: 32px;
+            }
+
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .dashboard-card {
+                min-height: 300px;
+                padding: 23px;
+            }
+
+            .information-section {
+                grid-template-columns: 1fr;
+                gap: 25px;
+                padding: 24px;
+            }
+
+            .health-notice {
+                padding: 16px;
+            }
+
+            .section-heading h2 {
+                font-size: 22px;
+            }
+        }
+
+        @media (max-width: 380px) {
+            .logout-btn {
+                padding: 10px 13px;
+            }
+
+            .welcome-section h1 {
+                font-size: 29px;
+            }
+
+            .dashboard-card h2 {
+                font-size: 18px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<header class="navbar">
+
+    <a href="{{ url_for('choose') }}" class="logo">
+        <span class="logo-mark">✦</span>
+        Cervi<span>AI</span>
+    </a>
+
+    <div class="nav-right">
+        <a href="{{ url_for('home') }}" class="home-link">
+            Home
+        </a>
+
+        <a href="{{ url_for('logout') }}" class="logout-btn">
+            Sign Out
+        </a>
+    </div>
+
+</header>
+
+<main class="dashboard">
+
+    <!-- Welcome section -->
+
+    <section class="welcome-section">
+
+        <div class="small-title">
+            YOUR PERSONAL DASHBOARD
+        </div>
+
+        <h1>
+            Welcome back,
+            <span>{{ session.get('username', 'User') }}</span>
+        </h1>
+
+        <p>
+            Welcome to CerviAI. Explore preliminary AI-supported
+            cervical screening information, review your saved
+            assessments, and learn about your screening options.
+        </p>
+
+    </section>
+
+  
+
+    <!-- Assessment features -->
+
+    <section class="assessment-section">
+
+        <div class="section-heading">
+            <h2>Choose Your Assessment</h2>
+
+            <p>
+                Select an option to begin or review your previous results.
+            </p>
+        </div>
+
+        <div class="dashboard-grid">
+
+            <!-- Clinical risk assessment -->
+
+            <article class="dashboard-card">
+
+                <div class="card-icon">✦</div>
+
+                <div class="card-number">01</div>
+
+                <h2>Clinical Risk Assessment</h2>
+
+                <p>
+                    Enter relevant health and medical-history information
+                    through a guided questionnaire to obtain a preliminary
+                    model-generated risk estimate.
+                </p>
+
+                <a href="{{ url_for('details') }}" class="card-button">
+                    <span>Start Assessment</span>
+                    <span>→</span>
+                </a>
+
+            </article>
+
+            <!-- Image analysis -->
+
+            <article class="dashboard-card">
+
+                <div class="card-icon">◈</div>
+
+                <div class="card-number">02</div>
+
+                <h2>Cervical Cell Image Analysis</h2>
+
+                <p>
+                    Upload a supported cervical-cell image to view the
+                    AI model's predicted cell category, confidence score,
+                    and visual explanation.
+                </p>
+
+                <a href="{{ url_for('image_upload') }}" class="card-button">
+                    <span>Upload Cell Image</span>
+                    <span>→</span>
+                </a>
+
+            </article>
+
+            <!-- Screening history -->
+
+            <article class="dashboard-card">
+
+                <div class="card-icon">↗</div>
+
+                <div class="card-number">03</div>
+
+                <h2>Screening History</h2>
+
+                <p>
+                    Review your previously saved clinical risk assessments,
+                    their model-generated estimates, and their recorded dates.
+                </p>
+
+                <a href="{{ url_for('history') }}"
+                   class="card-button secondary">
+                    <span>View History</span>
+                    <span>→</span>
+                </a>
+
+            </article>
+
+            <!-- Compare results -->
+
+            <article class="dashboard-card">
+
+                <div class="card-icon">⇄</div>
+
+                <div class="card-number">04</div>
+
+                <h2>Compare Results</h2>
+
+                <p>
+                    Compare your two most recent saved clinical assessments
+                    to review changes in the model-generated estimates.
+                </p>
+
+                <a href="{{ url_for('compare') }}"
+                   class="card-button secondary">
+                    <span>Compare Results</span>
+                    <span>→</span>
+                </a>
+
+            </article>
+
+        </div>
+
+    </section>
+
+    <!-- Guidance section -->
+
+    <section class="information-section">
+
+        <div class="info-content">
+
+            <div class="small-title">
+                BEFORE YOU BEGIN
+            </div>
+
+            <h2>
+                A simple step toward
+                <span>better awareness.</span>
+            </h2>
+
+            <p>
+                Learn about cervical health, explore screening options,
+                and build awareness through accessible health information and AI-powered insights.
+            </p>
+
+        </div>
+
+        <div class="info-items">
+
+            <div class="info-item">
+                <strong>01</strong>
+                <span>Provide accurate information</span>
+            </div>
+
+            <div class="info-item">
+                <strong>02</strong>
+                <span>Upload a supported cell image</span>
+            </div>
+
+            <div class="info-item">
+                <strong>03</strong>
+                <span>Review AI predictions carefully</span>
+            </div>
+
+            <div class="info-item">
+                <strong>04</strong>
+                <span>Discuss screening with a healthcare professional</span>
+            </div>
+
+        </div>
+
+    </section>
+
+    <!-- Footer -->
+
+    <footer class="medical-note">
+        
+       AI-based screening support • Not a medical diagnosis
+    </footer>
+
+</main>
+
+{% include "chatbot.html" %}
+
+</body>
+</html>

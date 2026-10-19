@@ -1,0 +1,718 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cell Image Analysis | CerviAI</title>
+
+    <style>
+        :root {
+            --primary: #6842a6;
+            --primary-dark: #4f2d86;
+            --lavender: #f3effb;
+            --background: #faf9fd;
+            --text: #25213a;
+            --muted: #77738a;
+            --border: #e5dff0;
+            --white: #ffffff;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "Segoe UI", Arial, sans-serif;
+            background: var(--background);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        nav {
+            height: 76px;
+            padding: 0 8%;
+            background: rgba(255, 255, 255, 0.96);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+            color: var(--text);
+        }
+
+        .brand-icon {
+            width: 43px;
+            height: 43px;
+            border-radius: 13px;
+            display: grid;
+            place-items: center;
+            color: white;
+            background: linear-gradient(135deg, #8660c8, #56318f);
+            font-size: 23px;
+            font-weight: 700;
+        }
+
+        .brand-name {
+            font-size: 23px;
+            font-weight: 750;
+            letter-spacing: -0.7px;
+        }
+
+        .brand-name span {
+            color: var(--primary);
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 22px;
+        }
+
+        .nav-link {
+            text-decoration: none;
+            color: #625c75;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .nav-link:hover {
+            color: var(--primary);
+        }
+.logo {
+text-decoration: none;
+font-size: 25px;
+font-weight: 700;
+color: #261b35;
+display: flex;
+align-items: center;
+gap: 7px;
+}
+
+.logo span:last-child {
+color: #7b4bb7;
+}
+
+.logo-mark {
+width: 31px;
+height: 31px;
+border-radius: 9px;
+background: #7b4bb7;
+color: white;
+display: inline-flex;
+align-items: center;
+justify-content: center;
+font-size: 17px;
+}
+        .page {
+            width: min(1120px, 90%);
+            margin: 42px auto 65px;
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--muted);
+            text-decoration: none;
+            font-size: 14px;
+            margin-bottom: 30px;
+        }
+
+        .back-link:hover {
+            color: var(--primary);
+        }
+
+        .intro {
+            margin-bottom: 30px;
+        }
+
+        .eyebrow {
+            display: inline-block;
+            color: var(--primary);
+            background: #eee6fb;
+            border-radius: 20px;
+            padding: 8px 13px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.7px;
+            text-transform: uppercase;
+            margin-bottom: 16px;
+        }
+
+        h1 {
+            font-size: clamp(30px, 4vw, 43px);
+            line-height: 1.2;
+            letter-spacing: -1.2px;
+            margin-bottom: 13px;
+        }
+
+        .intro p {
+            max-width: 660px;
+            color: var(--muted);
+            line-height: 1.8;
+            font-size: 15px;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1.55fr) minmax(260px, 0.8fr);
+            gap: 25px;
+            align-items: start;
+        }
+
+        .card {
+            background: var(--white);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 35px rgba(54, 35, 91, 0.045);
+        }
+
+        .card h2 {
+            font-size: 20px;
+            margin-bottom: 9px;
+        }
+
+        .card-description {
+            color: var(--muted);
+            font-size: 14px;
+            line-height: 1.7;
+            margin-bottom: 24px;
+        }
+
+        .upload-zone {
+            position: relative;
+            min-height: 255px;
+            border: 2px dashed #cfc0e7;
+            border-radius: 16px;
+            background: #fcfaff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 25px;
+            transition: 0.2s ease;
+        }
+
+        .upload-zone:hover,
+        .upload-zone.dragover {
+            border-color: var(--primary);
+            background: #f7f2ff;
+        }
+
+        .upload-icon {
+            width: 65px;
+            height: 65px;
+            display: grid;
+            place-items: center;
+            background: #eee6fb;
+            color: var(--primary);
+            border-radius: 18px;
+            font-size: 29px;
+            margin-bottom: 17px;
+        }
+
+        .upload-zone h3 {
+            font-size: 17px;
+            margin-bottom: 8px;
+        }
+
+        .upload-zone p {
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.7;
+        }
+
+        .browse-button {
+            display: inline-block;
+            margin-top: 17px;
+            padding: 11px 19px;
+            border: 1px solid #d7c8ef;
+            background: white;
+            color: var(--primary);
+            border-radius: 9px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .browse-button:hover {
+            background: var(--lavender);
+        }
+
+        #scan_image {
+            display: none;
+        }
+
+        .file-name {
+            display: none;
+            margin-top: 15px;
+            padding: 11px 13px;
+            background: #f2eef9;
+            border-radius: 9px;
+            color: var(--primary-dark);
+            font-size: 13px;
+            overflow-wrap: anywhere;
+            max-width: 100%;
+        }
+
+        .file-name.visible {
+            display: block;
+        }
+
+        .preview {
+            display: none;
+            max-width: 100%;
+            max-height: 220px;
+            object-fit: contain;
+            border-radius: 10px;
+            margin-top: 17px;
+        }
+
+        .preview.visible {
+            display: block;
+        }
+
+        .submit-button {
+            width: 100%;
+            margin-top: 22px;
+            padding: 15px 20px;
+            border: none;
+            border-radius: 11px;
+            background: linear-gradient(135deg, #7850b7, #57328e);
+            color: white;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .submit-button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 20px rgba(104, 66, 166, 0.22);
+        }
+
+        .submit-button:disabled {
+            opacity: 0.65;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .error-message {
+            padding: 13px 15px;
+            margin-bottom: 20px;
+            border: 1px solid #f0c9c9;
+            background: #fff2f2;
+            color: #a33131;
+            border-radius: 10px;
+            font-size: 14px;
+        }
+
+        .side-card {
+            margin-bottom: 20px;
+        }
+
+        .side-heading {
+            display: flex;
+            align-items: center;
+            gap: 11px;
+            margin-bottom: 19px;
+        }
+
+        .side-icon {
+            width: 39px;
+            height: 39px;
+            display: grid;
+            place-items: center;
+            background: #eee6fb;
+            border-radius: 12px;
+            font-size: 19px;
+        }
+
+        .side-heading h2 {
+            font-size: 17px;
+            margin: 0;
+        }
+
+        .step {
+            display: flex;
+            gap: 13px;
+            margin-bottom: 19px;
+        }
+
+        .step:last-child {
+            margin-bottom: 0;
+        }
+
+        .step-number {
+            flex-shrink: 0;
+            width: 29px;
+            height: 29px;
+            border-radius: 9px;
+            background: #f0eafb;
+            color: var(--primary);
+            display: grid;
+            place-items: center;
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        .step h3 {
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        .step p {
+            font-size: 12px;
+            line-height: 1.65;
+            color: var(--muted);
+        }
+
+        .notice {
+            border: 1px solid #e4d8f5;
+            background: #f6f1fd;
+            border-radius: 15px;
+            padding: 19px;
+        }
+
+        .notice h3 {
+            font-size: 14px;
+            color: var(--primary-dark);
+            margin-bottom: 8px;
+        }
+
+        .notice p {
+            font-size: 12px;
+            color: #655b78;
+            line-height: 1.8;
+        }
+
+        .secure-note {
+            margin-top: 19px;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            font-size: 12px;
+            color: var(--muted);
+            line-height: 1.7;
+        }
+
+        footer {
+            padding: 24px 8%;
+            text-align: center;
+            color: var(--muted);
+            border-top: 1px solid var(--border);
+            background: white;
+            font-size: 12px;
+            line-height: 1.8;
+        }
+
+        @media (max-width: 760px) {
+            nav {
+                padding: 0 5%;
+                height: 68px;
+            }
+
+            .brand-name {
+                font-size: 20px;
+            }
+
+            .nav-right {
+                gap: 12px;
+            }
+
+            .page {
+                width: 92%;
+                margin-top: 28px;
+            }
+
+            .layout {
+                grid-template-columns: 1fr;
+            }
+
+            .card {
+                padding: 22px;
+            }
+
+            .upload-zone {
+                min-height: 230px;
+            }
+        }
+
+        @media (max-width: 420px) {
+            .nav-right .nav-link:first-child {
+                display: none;
+            }
+
+            .brand-icon {
+                width: 37px;
+                height: 37px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<nav>
+    <a href="/" class="logo">
+            <span class="logo-mark">✦</span>
+            Cervi<span>AI</span>
+        </a>
+
+    <div class="nav-right">
+        <a href="{{ url_for('choose') }}" class="nav-link">Dashboard</a>
+        <a href="{{ url_for('history') }}" class="nav-link">My History</a>
+    </div>
+</nav>
+
+<main class="page">
+
+    <a href="{{ url_for('choose') }}" class="back-link">
+        <span>←</span> Back to Dashboard
+    </a>
+
+    <section class="intro">
+        <span class="eyebrow">AI-assisted cell analysis</span>
+        <h1>Cell Image Analysis</h1>
+        <p>
+            Upload a cervical cell image to explore an AI-generated
+            classification and visual explanation. Review the result as
+            preliminary screening support, not as a medical diagnosis.
+        </p>
+    </section>
+
+    <div class="layout">
+
+        <section class="card">
+            <h2>Upload your cell image</h2>
+            <p class="card-description">
+                Select an image from your device to begin the analysis.
+                Use a clear image in one of the supported formats.
+            </p>
+
+            {% if error %}
+                <div class="error-message">{{ error }}</div>
+            {% endif %}
+
+            <form id="upload-form"
+                  action="{{ url_for('predict_image') }}"
+                  method="POST"
+                  enctype="multipart/form-data">
+
+                <div class="upload-zone" id="upload-zone">
+
+                    <div class="upload-icon">↑</div>
+
+                    <h3 id="upload-heading">Choose an image to upload</h3>
+
+                    <p id="upload-description">
+                        Drag and drop your image here, or browse your files.
+                        <br>
+                        Supported formats: BMP, JPG, JPEG, PNG
+                    </p>
+
+                    <label for="scan_image" class="browse-button">
+                        Browse Files
+                    </label>
+
+                    <input
+                        type="file"
+                        id="scan_image"
+                        name="scan_image"
+                        accept=".bmp,.png,.jpg,.jpeg"
+                        required
+                    >
+
+                    <img id="image-preview"
+                         class="preview"
+                         alt="Selected cell image preview">
+
+                    <div id="file-name" class="file-name"></div>
+
+                </div>
+
+                <button type="submit"
+                        id="analyze-button"
+                        class="submit-button">
+                    Analyze Cell Image →
+                </button>
+
+                <div class="secure-note">
+                    <span>ⓘ</span>
+                    <span>
+                        Upload only images you are authorized to use.
+                        This page does not guarantee secure storage or
+                        automatic deletion of uploaded files.
+                    </span>
+                </div>
+
+            </form>
+        </section>
+
+        <aside>
+
+            <section class="card side-card">
+                <div class="side-heading">
+                    <div class="side-icon">✦</div>
+                    <h2>How it works</h2>
+                </div>
+
+                <div class="step">
+                    <div class="step-number">01</div>
+                    <div>
+                        <h3>Upload an image</h3>
+                        <p>
+                            Choose a supported cervical cell image from
+                            your computer.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <div class="step-number">02</div>
+                    <div>
+                        <h3>AI classification</h3>
+                        <p>
+                            The trained vision model predicts one of its
+                            five learned cell categories.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <div class="step-number">03</div>
+                    <div>
+                        <h3>Review the explanation</h3>
+                        <p>
+                            View the predicted class, model confidence
+                            and explanatory heatmap.
+                        </p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="notice">
+                <h3>Important health information</h3>
+                <p>
+                    CerviAI is an educational research prototype.
+                    Its predictions and visual explanations have not
+                    been established as a clinically validated test.
+                    They cannot confirm or rule out cervical cancer.
+                    Consult a qualified healthcare professional for
+                    screening and medical decisions.
+                </p>
+            </section>
+
+        </aside>
+    </div>
+</main>
+
+<footer>
+    <strong>CerviAI</strong> · AI-assisted cervical screening research
+    <br>
+    Designed to support awareness and understanding, not replace
+    professional medical evaluation.
+</footer>
+
+<script>
+    const fileInput = document.getElementById("scan_image");
+    const uploadZone = document.getElementById("upload-zone");
+    const fileName = document.getElementById("file-name");
+    const preview = document.getElementById("image-preview");
+    const uploadHeading = document.getElementById("upload-heading");
+    const uploadDescription = document.getElementById("upload-description");
+    const form = document.getElementById("upload-form");
+    const analyzeButton = document.getElementById("analyze-button");
+
+    const allowedExtensions = ["bmp", "png", "jpg", "jpeg"];
+
+    function showSelectedFile(file) {
+        if (!file) return;
+
+        const extension = file.name.split(".").pop().toLowerCase();
+
+        if (!allowedExtensions.includes(extension)) {
+            alert("Please select a BMP, PNG, JPG, or JPEG image.");
+            fileInput.value = "";
+            fileName.classList.remove("visible");
+            preview.classList.remove("visible");
+            preview.removeAttribute("src");
+            return;
+        }
+
+        fileName.textContent = "Selected file: " + file.name;
+        fileName.classList.add("visible");
+        uploadHeading.textContent = "Image selected successfully";
+        uploadDescription.textContent =
+            "Your image is ready for analysis.";
+
+        if (preview.dataset.objectUrl) {
+            URL.revokeObjectURL(preview.dataset.objectUrl);
+        }
+
+        const objectUrl = URL.createObjectURL(file);
+        preview.src = objectUrl;
+        preview.dataset.objectUrl = objectUrl;
+        preview.classList.add("visible");
+    }
+
+    fileInput.addEventListener("change", function () {
+        showSelectedFile(this.files[0]);
+    });
+
+    uploadZone.addEventListener("dragover", function (event) {
+        event.preventDefault();
+        uploadZone.classList.add("dragover");
+    });
+
+    uploadZone.addEventListener("dragleave", function () {
+        uploadZone.classList.remove("dragover");
+    });
+
+    uploadZone.addEventListener("drop", function (event) {
+        event.preventDefault();
+        uploadZone.classList.remove("dragover");
+
+        const files = event.dataTransfer.files;
+        if (!files.length) return;
+
+        const file = files[0];
+        const extension = file.name.split(".").pop().toLowerCase();
+
+        if (!allowedExtensions.includes(extension)) {
+            alert("Please select a BMP, PNG, JPG, or JPEG image.");
+            return;
+        }
+
+        const transfer = new DataTransfer();
+        transfer.items.add(file);
+        fileInput.files = transfer.files;
+
+        showSelectedFile(file);
+    });
+
+    form.addEventListener("submit", function (event) {
+        if (!fileInput.files.length) {
+            event.preventDefault();
+            alert("Please select a cell image first.");
+            return;
+        }
+
+        analyzeButton.disabled = true;
+        analyzeButton.textContent = "Analyzing image... Please wait";
+    });
+</script>
+
+</body>
+</html>

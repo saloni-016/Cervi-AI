@@ -1,0 +1,40 @@
+
+<link rel="stylesheet" href="{{ url_for('static', filename='chatbot.css') }}">
+
+<button
+    type="button"
+    class="ai-float-button"
+    id="aiFloatButton"
+    aria-label="Open CerviAI Assistant"
+    title="Ask CerviAI"
+>
+    ✦
+</button>
+
+<div class="ai-chat-window" id="aiChatWindow">
+    <div class="ai-chat-header">
+        <div>
+            <h3>CerviAI Assistant</h3>
+            <small>AI educational support</small>
+        </div>
+        <button type="button" id="aiCloseButton" aria-label="Close chat">×</button>
+    </div>
+
+    <div class="ai-chat-body" id="aiChatBody">
+        <div class="ai-chat-message">
+            Hi! 👋 I'm the CerviAI Assistant. How can I help you?
+        </div>
+    </div>
+
+    <div class="ai-chat-input-area">
+        <textarea
+            id="clinicalQuestion"
+            rows="2"
+            placeholder="Ask a question..."
+            aria-label="Your question"
+        ></textarea>
+        <button type="button" id="aiSendButton">Send</button>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='chatbot.js') }}" defer></script>

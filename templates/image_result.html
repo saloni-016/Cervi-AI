@@ -1,0 +1,526 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>CerviAI | Image Analysis Results</title>
+
+    <style>
+        :root {
+            --bg: #faf8fc;
+            --lavender: #f6f1fa;
+            --purple: #7b4bb7;
+            --dark-purple: #543078;
+            --text: #2c2234;
+            --muted: #766b80;
+            --border: #eee6f3;
+            --white: #ffffff;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        nav {
+            background: var(--white);
+            border-bottom: 1px solid var(--border);
+            padding: 17px 6%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+       .logo {
+text-decoration: none;
+font-size: 25px;
+font-weight: 700;
+color: #261b35;
+display: flex;
+align-items: center;
+gap: 7px;
+}
+
+.logo span:last-child {
+color: #7b4bb7;
+}
+
+.logo-mark {
+width: 31px;
+height: 31px;
+border-radius: 9px;
+background: #7b4bb7;
+color: white;
+display: inline-flex;
+align-items: center;
+justify-content: center;
+font-size: 17px;
+}
+
+        .nav-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 22px;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: var(--text);
+            font-size: 14px;
+        }
+
+        .nav-links a:hover {
+            color: var(--purple);
+        }
+
+        .container {
+            max-width: 1150px;
+            width: 92%;
+            margin: 35px auto;
+        }
+
+        .page-heading {
+            margin-bottom: 25px;
+        }
+
+        .page-heading h1 {
+            color: var(--dark-purple);
+            font-size: 30px;
+            margin-top: 10px;
+        }
+
+        .page-heading p {
+            color: var(--muted);
+            margin-top: 5px;
+        }
+
+        .tag {
+            display: inline-block;
+            background: var(--lavender);
+            color: var(--purple);
+            padding: 6px 13px;
+            border-radius: 30px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .card {
+            background: var(--white);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 22px;
+            box-shadow: 0 4px 18px rgba(85, 48, 120, 0.04);
+            min-width: 0;
+        }
+
+        .card h2 {
+            font-size: 20px;
+            color: var(--dark-purple);
+            margin-bottom: 14px;
+        }
+
+        .card h3 {
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+
+        .muted {
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .prediction {
+            font-size: 28px;
+            font-weight: bold;
+            color: var(--purple);
+            margin: 6px 0;
+            overflow-wrap: anywhere;
+        }
+
+        .notice {
+            background: var(--lavender);
+            border-left: 4px solid var(--purple);
+            padding: 14px 16px;
+            margin-top: 18px;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .notice p {
+            margin-top: 6px;
+        }
+
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 22px;
+        }
+
+        .image-frame {
+            min-height: 250px;
+            background: #f8f5fa;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .image-frame img {
+            display: block;
+            width: 100%;
+            max-height: 380px;
+            object-fit: contain;
+        }
+
+        .placeholder {
+            padding: 25px;
+            color: var(--muted);
+            text-align: center;
+        }
+
+        .legend {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 12px;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .gradient {
+            height: 10px;
+            flex: 1;
+            border-radius: 10px;
+            background: linear-gradient(
+                to right,
+                #c9b6ed,
+                #a26ee0,
+                #f5a623,
+                #e74c3c
+            );
+        }
+
+        .two-column {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 22px;
+        }
+
+        .guidance {
+            background: #fbf9fe;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 18px;
+        }
+
+        .guidance h3 {
+            color: var(--dark-purple);
+        }
+
+        .guidance p + p {
+            margin-top: 10px;
+        }
+
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin: 25px 0 40px;
+        }
+
+        .btn {
+            display: inline-block;
+            border-radius: 9px;
+            padding: 12px 22px;
+            font-size: 14px;
+            font-weight: bold;
+            text-align: center;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background: var(--purple);
+            color: var(--white);
+            border: 1px solid var(--purple);
+        }
+
+        .btn-primary:hover {
+            background: var(--dark-purple);
+        }
+
+        .btn-secondary {
+            background: var(--white);
+            color: var(--purple);
+            border: 1px solid var(--purple);
+        }
+
+        .btn-secondary:hover {
+            background: var(--lavender);
+        }
+
+        footer {
+            background: var(--white);
+            border-top: 1px solid var(--border);
+            padding: 20px;
+            text-align: center;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        @media (max-width: 700px) {
+            .image-grid,
+            .two-column {
+                grid-template-columns: 1fr;
+            }
+
+            .page-heading h1 {
+                font-size: 25px;
+            }
+
+            .card {
+                padding: 18px;
+            }
+
+            .image-frame {
+                min-height: 200px;
+            }
+
+            .nav-links {
+                gap: 14px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <nav>
+        <a href="/" class="logo">
+            <span class="logo-mark">✦</span>
+            Cervi<span>AI</span>
+        </a>
+
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/choose">Dashboard</a>
+            <a href="/image_upload">Image Analysis</a>
+        </div>
+    </nav>
+
+    <main class="container">
+
+        <section class="page-heading">
+            <span class="tag">AI IMAGE ANALYSIS</span>
+
+            <h1>Image Analysis Results</h1>
+
+            <p>
+                Understand your AI-assisted cell image analysis
+                and the regions that influenced the prediction.
+            </p>
+        </section>
+
+        <!-- Prediction summary -->
+        <section class="card">
+
+            <div class="result-header">
+                <div>
+                    <h2>Predicted Cell Category</h2>
+
+                    <div class="prediction">
+                        {{ predicted_class | default("Prediction unavailable", true) | replace("_", " ") | replace("-", " ") }}
+                    </div>
+
+                    <p class="muted">
+                        Model confidence:
+                        {% if confidence is defined and confidence is not none %}
+                            {{ "%.1f"|format(confidence|float) }}%
+                        {% else %}
+                            Not available
+                        {% endif %}
+                    </p>
+                </div>
+
+                <span class="tag">Preliminary AI result</span>
+            </div>
+
+            <div class="notice">
+                <strong>Important</strong>
+                <p>
+                    Model confidence indicates how confident the model
+                    was in its predicted category. It is not your personal
+                    cancer-risk percentage and cannot confirm or rule out
+                    cancer.
+                </p>
+            </div>
+
+        </section>
+
+        <!-- Uploaded image and heatmap -->
+        <section class="card">
+
+            <h2>Visual Explanation</h2>
+
+            <div class="image-grid">
+
+                <div>
+                    <h3>Uploaded Image</h3>
+
+                    <div class="image-frame">
+                        {% if image_path %}
+                            <img
+                                src="{{ image_path }}"
+                                alt="Uploaded cervical cell image">
+                        {% else %}
+                            <div class="placeholder">
+                                Uploaded image is not available.
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div>
+                    <h3>AI Explanation Heatmap</h3>
+
+                    <div class="image-frame">
+                        {% if heatmap_path %}
+                            <img
+                                src="{{ heatmap_path }}"
+                                alt="AI heatmap showing influential regions">
+                        {% else %}
+                            <div class="placeholder">
+                                Heatmap is not available for this result.
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="legend">
+                        <span>Lower influence</span>
+                        <div class="gradient"></div>
+                        <span>Higher influence</span>
+                    </div>
+
+                    <p class="muted" style="margin-top: 8px;">
+                        Colours represent relative influence according
+                        to the heatmap generation method. Red or yellow
+                        areas do not necessarily indicate abnormal cells
+                        or cancer.
+                    </p>
+                </div>
+
+            </div>
+
+            <div class="notice">
+                <strong>Understanding your heatmap</strong>
+
+                <p>
+                    {{ heatmap_message | default(
+                        "Highlighted regions show which parts of the image influenced the AI prediction. These highlights do not confirm cancer or indicate personal cancer risk.",
+                        true
+                    ) }}
+                </p>
+            </div>
+
+        </section>
+
+        <!-- Result explanation and guidance -->
+        <section class="two-column">
+
+            <div class="card">
+                <h2>Understanding Your Result</h2>
+
+                <p>
+                    Your uploaded image was classified by the AI as:
+                    <strong>
+                        {{ predicted_class | default("an undetermined cell category", true) | replace("_", " ") | replace("-", " ") }}
+                    </strong>.
+                </p>
+
+                <p style="margin-top: 12px;">
+                    This means the image most closely matched this
+                    category in the model's training data. The result
+                    is preliminary and does not establish whether the
+                    sample is normal, precancerous, or cancerous.
+                </p>
+
+                <div class="notice">
+                    <strong>What should you do next?</strong>
+
+                    <p>
+                        You should consult a qualified healthcare professional.
+                        Do not use this AI result alone to make medical
+                        decisions.
+                    </p>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Recommended Next Step</h2>
+
+                <div class="guidance">
+                    <h3>Professional review</h3>
+
+                    <p>
+                        Ask a qualified healthcare professional about
+                        appropriate cervical screening and interpretation
+                        of your sample.
+                    </p>
+
+                    <p>
+                        If you have unusual vaginal bleeding, persistent
+                        unusual discharge, pelvic pain, or a previous
+                        abnormal screening result, seek medical advice.
+                        These symptoms can have many causes and cannot
+                        be diagnosed by this website.
+                    </p>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Page actions -->
+        <div class="actions">
+            <a href="/full_report" class="btn btn-primary">
+                See Full Report
+            </a>
+
+            <a href="/image_upload" class="btn btn-secondary">
+                Analyze Another Image
+            </a>
+        </div>
+
+    </main>
+
+    <footer>
+        CerviAI — Educational AI screening support.
+        Not a substitute for professional medical assessment.
+    </footer>
+
+{% include "chatbot.html" %}
+
+</body>
+</html>

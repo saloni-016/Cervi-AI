@@ -1,0 +1,128 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CerviAI | Full Report</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f8f7fc;color:#252543;font-family:Arial,sans-serif;line-height:1.7}
+nav{background:white;padding:18px 7%;border-bottom:1px solid #eee}
+.logo {
+text-decoration: none;
+font-size: 25px;
+font-weight: 700;
+color: #261b35;
+display: flex;
+align-items: center;
+gap: 7px;
+}
+
+.logo span:last-child {
+color: #7b4bb7;
+}
+
+.logo-mark {
+width: 31px;
+height: 31px;
+border-radius: 9px;
+background: #7b4bb7;
+color: white;
+display: inline-flex;
+align-items: center;
+justify-content: center;
+font-size: 17px;
+}
+main{max-width:900px;width:92%;margin:35px auto}
+.card{background:white;border:1px solid #e8e5ef;border-radius:15px;padding:24px;margin:20px 0}
+h1{line-height:1.3}h2{color:#6d28d9;font-size:21px}
+.muted{color:#6b7280;font-size:14px}
+li{margin:8px 0}
+a.button{display:inline-block;background:#7c3aed;color:white;text-decoration:none;padding:12px 18px;border-radius:9px}
+.warning{background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:16px;font-size:14px}
+</style>
+</head>
+<body>
+<nav>
+<a href="/" class="logo">
+            <span class="logo-mark">✦</span>
+            Cervi<span>AI</span>
+        </a>
+</nav>
+
+<main>
+<h1>Your Full Image Analysis Report</h1>
+<p class="muted">AI-assisted information to help you discuss screening with a qualified healthcare professional.</p>
+
+<section class="card">
+<h2>1. Predicted Cell Type</h2>
+<p><strong>{{ image_result.get("class_name", "Not available") }}</strong></p>
+<p>Image classification confidence:
+<strong>{{ image_result.get("confidence", "Not available") }}{% if image_result.get("confidence") is not none %}%{% endif %}</strong></p>
+<p class="muted">This is a model prediction, not a confirmed diagnosis.</p>
+</section>
+
+
+
+<section class="card">
+<h2>2. Model Explanation</h2>
+{% set explanations = image_result.get("explanation", []) %}
+{% if explanations %}
+<ul>
+{% for item in explanations %}
+<li>{{ item }}</li>
+{% endfor %}
+</ul>
+{% else %}
+<p>No additional model explanation is available.</p>
+{% endif %}
+</section>
+
+<section class="card">
+<h2>3. Possible Cell-Type Interpretation</h2>
+<p>The predicted category is just a suggestion . A qualified cytopathologist must confirm cell findings.</p>
+<p>Different cervical cell categories can represent different cell appearances. A category prediction alone cannot establish whether a person has cancer or a precancerous lesion.</p>
+</section>
+
+<section class="card">
+<h2>4. Causes and Risk Factors</h2>
+<ul>
+<li>Persistent infection with high-risk types of human papillomavirus (HPV) is the principal cause of nearly all cervical cancers.</li>
+<li>Not attending recommended cervical screening can delay the detection of precancerous changes.</li>
+<li>Smoking and certain conditions that weaken the immune system can increase the risk of cervical disease.</li>
+<li>A cell image classification alone cannot identify the cause of an individual patient's findings.</li>
+</ul>
+</section>
+
+<section class="card">
+<h2>5. Do's</h2>
+<ul>
+<li>Discuss the result with a qualified healthcare professional.</li>
+<li>Follow age- and guideline-appropriate cervical screening recommendations.</li>
+<li>Ask whether an HPV test, Pap test, repeat screening, or further evaluation is appropriate.</li>
+<li>Keep track of screening appointments and follow-up recommendations.</li>
+<li>Consider HPV vaccination according to local medical guidance if eligible.</li>
+</ul>
+</section>
+
+<section class="card">
+<h2>6. Don'ts</h2>
+<ul>
+<li>Do not interpret the AI prediction or its confidence as a cancer diagnosis.</li>
+<li>Do not treat the heatmap as proof of an affected or cancerous area.</li>
+<li>Do not skip or delay professional assessment because the model reports a low category.</li>
+<li>Do not start medication or treatment based solely on this report.</li>
+<li>Do not assume that a normal-looking image rules out disease.</li>
+</ul>
+</section>
+
+<div class="warning">
+<strong>Medical disclaimer:</strong> CerviAI is a screening-support project, not a diagnostic system. Its image classifier has been trained on cell categories and should not independently assign Low, Medium, or High cancer risk. Seek professional medical advice for interpretation and next steps.
+</div>
+
+<br>
+<a class="button" href="/image_result">← Back to Results</a>
+</main>
+</body>
+</html>

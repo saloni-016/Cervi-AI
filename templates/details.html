@@ -1,0 +1,274 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Clinical Risk Assessment | CerviAI</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='details.css') }}">
+</head>
+
+<body>
+    <!-- Navigation bar -->
+    <nav class="history-navbar">
+      <a href="/" class="logo">
+            <span class="logo-mark">✦</span>
+            Cervi<span>AI</span>
+        </a>
+        
+
+        <div class="nav-links">
+            <a href="{{ url_for('choose') }}">Dashboard</a>
+            <a href="{{ url_for('details') }}">Clinical Assessment</a>
+            <a href="{{ url_for('image_upload') }}">Cell Analysis</a>
+            <a href="{{ url_for('history') }}" class="active">
+                History
+            </a>
+            <a href="{{ url_for('compare') }}">Compare</a>
+            <a href="{{ url_for('logout') }}" class="logout-link">
+                Logout
+            </a>
+        </div>
+    </nav>
+
+    <main class="assess-page">
+
+        <header class="assess-heading">
+            <div class="assess-eyebrow">ASSESS LAYER</div>
+
+            <h1>Clinical Risk Assessment</h1>
+
+            <p>
+                Share your health history to generate a preliminary
+                AI-based screening assessment.
+            </p>
+        </header>
+
+        <div class="assess-notice">
+            <span class="notice-mark">!</span>
+
+            <div>
+                <strong>Before you begin</strong>
+                <p>
+                    This prototype provides experimental AI screening
+                    support, not a diagnosis.<br> Your result should not
+                    replace professional medical advice.<br>
+                    Only submit the information you are comfortable sharing with this
+                    application.
+                </p>
+            </div>
+        </div>
+
+        <form class="assess-card"
+              action="{{ url_for('predict') }}"
+              method="POST">
+
+            <!-- SECTION 1: BASIC INFORMATION -->
+            <section class="assess-section">
+
+                <div class="assess-section-heading">
+                    <span class="section-number">01</span>
+
+                    <div>
+                        <h2>Basic Information</h2>
+                        <p>Enter the requested personal health details.</p>
+                    </div>
+                </div>
+
+                <div class="assess-grid">
+
+                    <div class="assess-field">
+                        <label for="Age">Age (years)</label>
+                        <input
+                            id="Age"
+                            type="number"
+                            name="Age"
+                            min="18"
+                            max="100"
+                            required
+                            placeholder="Enter your age">
+                    </div>
+
+                    <div class="assess-field">
+                        <label for="partners">
+                            Number of Sexual Partners
+                        </label>
+                        <input
+                            id="partners"
+                            type="number"
+                            name="Number_of_sexual_partners"
+                            min="0"
+                            max="100"
+                            required
+                            placeholder="Enter a number">
+                    </div>
+
+                    <div class="assess-field">
+                        <label for="first-sex">
+                            Age at First Sexual Intercourse
+                        </label>
+                        <input
+                            id="first-sex"
+                            type="number"
+                            name="First_sexual_intercourse"
+                            min="0"
+                            max="100"
+                            required
+                            placeholder="Age in years">
+                    </div>
+
+                </div>
+            </section>
+
+            <hr class="assess-divider">
+
+            <!-- SECTION 2: LIFESTYLE -->
+            <section class="assess-section">
+
+                <div class="assess-section-heading">
+                    <span class="section-number">02</span>
+
+                    <div>
+                        <h2>Lifestyle &amp; Contraceptive History</h2>
+                        <p>Select the options that describe your history.</p>
+                    </div>
+                </div>
+
+                <div class="assess-grid">
+
+                    <div class="assess-field">
+                        <label for="Smokes">Do you smoke?</label>
+                        <select id="Smokes" name="Smokes" required>
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+
+                    <div class="assess-field">
+                        <label for="smoke-years">
+                            Smoking Duration (years)
+                        </label>
+                        <input
+                            id="smoke-years"
+                            type="number"
+                            name="Smokes_years"
+                            min="0"
+                            max="100"
+                            step="any"
+                            required
+                            placeholder="Enter years">
+                    </div>
+
+                    <div class="assess-field">
+                        <label for="hormonal">
+                            Hormonal Contraceptive Use
+                        </label>
+                        <select
+                            id="hormonal"
+                            name="Hormonal_Contraceptives"
+                            required>
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+
+                    <div class="assess-field">
+                        <label for="iud">Use of an IUD</label>
+                        <select id="iud" name="IUD" required>
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+
+                </div>
+            </section>
+
+            <hr class="assess-divider">
+
+            <!-- SECTION 3: MEDICAL HISTORY -->
+            <section class="assess-section">
+
+                <div class="assess-section-heading">
+                    <span class="section-number">03</span>
+
+                    <div>
+                        <h2>Medical History</h2>
+                        <p>
+                            Provide information about previous diagnoses
+                            and medical history.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="assess-grid">
+
+                    <div class="assess-field">
+                        <label for="STDs">History of STDs</label>
+                        <select id="STDs" name="STDs" required>
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+
+                    <div class="assess-field">
+                        <label for="std-number">Number of STDs</label>
+                        <input
+                            id="std-number"
+                            type="number"
+                            name="STDs_number"
+                            min="0"
+                            max="100"
+                            required
+                            placeholder="Enter a number">
+                    </div>
+
+                    <div class="assess-field">
+                        <label for="cancer">
+                            Previous Cancer Diagnosis
+                        </label>
+                        <select id="cancer" name="Dx_Cancer" required>
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+
+                    <div class="assess-field">
+                        <label for="cin">Previous CIN Diagnosis</label>
+                        <select id="cin" name="Dx_CIN" required>
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+
+                    <div class="assess-field">
+                        <label for="hpv">Previous HPV Diagnosis</label>
+                        <select id="hpv" name="Dx_HPV" required>
+                            <option value="0">No</option>
+                            <option value="1">Yes</option>
+                        </select>
+                    </div>
+
+                </div>
+            </section>
+
+            <!-- FORM ACTIONS -->
+            <div class="assess-actions">
+                
+
+                <button type="submit" class="assess-submit">
+                    Generate Assessment &rarr;
+                </button>
+            </div>
+
+        </form>
+
+        <footer class="assess-footer">
+            CerviAI &bull; AI-based screening support, not a diagnosis
+        </footer>
+
+    </main>
+
+</body>
+</html>
