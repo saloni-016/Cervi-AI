@@ -42,7 +42,7 @@ def make_json_safe(value):
     return value
 
 app = Flask(__name__)
-app.secret_key = "secret123"
+app.secret_key = os.getenv("SECRET_KEY")
 
 UPLOAD_FOLDER = "static/uploads"
 EXPLANATION_FOLDER = "static/explanations"
