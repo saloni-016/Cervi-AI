@@ -1,0 +1,11 @@
+.env
+*.db
+*.db-shm
+*.db-wal
+__pycache__/
+*.pyc
+venv/
+.venv/
+static/uploads/
+static/explanations/
+sipakmed_images/

@@ -1,0 +1,16 @@
+Flask>=3.0,<4.0
+Werkzeug>=3.0
+gunicorn
+joblib
+numpy
+pandas
+scikit-learn
+xgboost
+torch
+torchvision
+Pillow
+matplotlib
+shap
+python-dotenv
+groq
+reportlab>=4.0
