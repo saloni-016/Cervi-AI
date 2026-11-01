@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 from PIL import Image, ImageDraw
 
 from train_vit import (
-    model,
+    get_model,
     transform,
     DEVICE,
     CLASSES,
@@ -25,6 +25,7 @@ from train_vit import (
     FLAG_THRESHOLD,
     risk_level,
     RECOMMENDATION,
+    DISCLAIMER,
 )
 from train_vit import DISCLAIMER
 
@@ -49,7 +50,8 @@ def get_probabilities(images):
         chunk = images[start:start + BATCH_SIZE]
         batch = torch.stack([transform(img) for img in chunk]).to(DEVICE)
         with torch.no_grad():
-            probs = torch.softmax(model(batch), dim=1).cpu().numpy()
+            current_model = get_model()
+            probs = torch.softmax(current_model(batch), dim=1).cpu().numpy()
         outputs.append(probs)
     return np.concatenate(outputs)
 
