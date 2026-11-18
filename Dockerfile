@@ -9,8 +9,9 @@ COPY requirements-base.txt requirements-torch.txt ./
 # CPU-only ML wheels reduce the image size on a host without a GPU.
 RUN python -m pip install --no-cache-dir --only-binary=:all: pip==26.3 setuptools==84.1.0 \
     && python -m pip install --no-cache-dir --only-binary=:all: -r requirements-base.txt xgboost-cpu \
-    && python -m pip install --no-cache-dir --only-binary=:all: \
+        && python -m pip install --no-cache-dir --only-binary=:all: \
          --index-url https://download.pytorch.org/whl/cpu -r requirements-torch.txt \
+    && python -m pip install --no-cache-dir --only-binary=:all: --upgrade setuptools==84.1.0 \
     && python -m pip check
 RUN useradd -m -U -u 10001 cerviai && chown cerviai:cerviai /app
 COPY app.py explain_xgboost.py explain_vit.py train_vit.py ./
