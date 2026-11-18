@@ -12,7 +12,7 @@ permissions: {}
 
 concurrency:
   group: cerviai-cloud-run
-  cancel-in-progress: false
+  cancel-in-progress: false  
 
 jobs:
   publish:
@@ -68,7 +68,13 @@ jobs:
             -e PORT=9080 -e SECRET_KEY=offline-test-key-not-a-secret \
             -e DEMO_PASSWORD=offline-smoke-invitation cerviai-smoke)
           cleanup() {
-            if [ "$?" -ne 0 ]; then docker logs "$container"; fi
+            status=$?
+            if [ "$status" -ne 0 ]; then
+              echo "=== CONTAINER STATE ==="
+              docker inspect "$container" --format 'status={{.State.Status}} exit={{.State.ExitCode}} error={{.State.Error}} oom={{.State.OOMKilled}}' || true
+              echo "=== CONTAINER LOGS ==="
+              docker logs "$container" 2>&1 || true
+            fi
             docker rm -f "$container" >/dev/null
           }
           trap cleanup EXIT
