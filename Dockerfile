@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 WORKDIR /app
 COPY requirements-base.txt requirements-torch.txt ./
 # CPU-only ML wheels reduce the image size on a host without a GPU.
-RUN python -m pip install --no-cache-dir --only-binary=:all: pip==26.3 \
+RUN python -m pip install --no-cache-dir --only-binary=:all: pip==26.3 setuptools==84.1.0 \
     && python -m pip install --no-cache-dir --only-binary=:all: -r requirements-base.txt xgboost-cpu \
     && python -m pip install --no-cache-dir --only-binary=:all: \
          --index-url https://download.pytorch.org/whl/cpu -r requirements-torch.txt \
