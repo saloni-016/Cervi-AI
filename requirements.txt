@@ -1,16 +1,3 @@
-Flask>=3.0,<4.0
-Werkzeug>=3.0
-gunicorn
-joblib
-numpy
-pandas
-scikit-learn==1.8.0
+-r requirements-base.txt
+-r requirements-torch.txt
 xgboost
-torch
-torchvision
-Pillow
-matplotlib
-shap
-python-dotenv
-groq
-reportlab>=4.0

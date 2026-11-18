@@ -1247,7 +1247,8 @@ async function askClinicalChat() {
         const response = await fetch("/clinical-result-chat", {
             method: "POST",
             headers: {
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "X-CSRF-Token": {{ csrf_token()|tojson }}
             },
             body: JSON.stringify({
                 question: question,

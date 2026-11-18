@@ -1,15 +1,28 @@
 
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify
-import joblib
-import sqlite3
-from datetime import datetime
 import os
-import numpy as np
+import re
+import secrets
+import sqlite3
 import uuid
+from collections import OrderedDict
+from contextlib import closing, contextmanager
+from datetime import datetime
+from hmac import compare_digest
+from pathlib import Path
+from shutil import rmtree
+from tempfile import TemporaryDirectory
+from threading import Lock
+from time import time
 
+import numpy as np
 from dotenv import load_dotenv
+from flask import (
+    Flask, abort, jsonify, redirect, render_template, request,
+    send_from_directory, session, url_for,
+)
 from groq import Groq
-from werkzeug.utils import secure_filename
+from PIL import Image
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from explain_xgboost import (
     explain_clinical_input,
@@ -19,9 +32,8 @@ from explain_vit import explain_image
 
 load_dotenv()
 
-client = Groq(
-    api_key=os.getenv("GROQ_API_KEY")
-)
+groq_key = os.getenv("GROQ_API_KEY")
+client = Groq(api_key=groq_key, timeout=45.0, max_retries=0) if groq_key else None
 
 def make_json_safe(value):
     if isinstance(value, np.ndarray):
@@ -43,52 +55,307 @@ def make_json_safe(value):
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY")
+DATABASE_URL = os.getenv("DATABASE_URL")
+DEMO_PASSWORD = os.getenv("DEMO_PASSWORD")
+ON_CLOUD_RUN = bool(os.getenv("K_SERVICE"))
+USERS_TABLE = "public.users" if DATABASE_URL else "users"
+RESULTS_TABLE = "public.results" if DATABASE_URL else "results"
 
-UPLOAD_FOLDER = "static/uploads"
-EXPLANATION_FOLDER = "static/explanations"
+if ON_CLOUD_RUN and not all((DATABASE_URL, app.secret_key, DEMO_PASSWORD)):
+    raise RuntimeError("Configure DATABASE_URL, SECRET_KEY and DEMO_PASSWORD in Cloud Run.")
 
-app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
-#app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024
+app.config.update(
+    MAX_CONTENT_LENGTH=10 * 1024 * 1024,
+    SESSION_COOKIE_SECURE=ON_CLOUD_RUN,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+)
 
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(EXPLANATION_FOLDER, exist_ok=True)
 
-model = joblib.load("model.pkl")
-imputer = joblib.load("imputer.pkl")
+@app.get("/healthz")
+def healthz():
+    # The worker must finish loading the app and initializing the DB first.
+    return "ok"
 
+
+@app.before_request
+def require_demo_password():
+    if request.endpoint == "healthz" or not DEMO_PASSWORD:
+        return None
+    auth = request.authorization
+    if (
+        auth and auth.type == "basic" and auth.username == "demo"
+        and compare_digest((auth.password or "").encode(), DEMO_PASSWORD.encode())
+    ):
+        return None
+    return "This demo requires an invitation password.", 401, {
+        "WWW-Authenticate": 'Basic realm="CerviAI demo", charset="UTF-8"',
+        "Cache-Control": "no-store",
+    }
+
+
+@app.context_processor
+def inject_csrf_token():
+    return {"csrf_token": csrf_token}
+
+
+def csrf_token():
+    if "csrf_token" not in session:
+        session["csrf_token"] = secrets.token_urlsafe(32)
+    return session["csrf_token"]
+
+
+@app.before_request
+def require_csrf_token():
+    if request.method != "POST" or request.endpoint is None:
+        return None
+    if request.endpoint == "clinical_result_chat" and "email" not in session:
+        return None  # The handler returns 401 without reading the payload.
+    expected = session.get("csrf_token")
+    supplied = request.headers.get("X-CSRF-Token")
+    if supplied is None and expected:
+        supplied = request.form.get("csrf_token", "")
+    if not expected or not supplied or not compare_digest(expected.encode(), supplied.encode()):
+        abort(403, "The form expired. Go back, reload the page, and try again.")
+
+
+@app.after_request
+def response_security_headers(response):
+    if request.endpoint not in {"static", "healthz"}:
+        response.headers["Cache-Control"] = "private, no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    if ON_CLOUD_RUN:
+        response.headers["Content-Security-Policy"] = (
+            "frame-ancestors 'none'; form-action 'self'; base-uri 'none'; object-src 'none'"
+        )
+    return response
+
+
+# Cloud Run's writable filesystem is temporary and counts toward instance RAM.
+# Keep image results outside /static, and bound space used per worker.
+MEDIA_TTL = 60 * 60
+MAX_MEDIA_SETS = 8
+IMAGE_FORMATS = {".bmp": "BMP", ".png": "PNG", ".jpg": "JPEG", ".jpeg": "JPEG"}
+
+
+# Latest report details stay on this worker, not in a readable/size-limited cookie.
+RESULT_KEYS = ("last_result", "last_image_result", "last_combined_result")
+RECENT_RESULTS = OrderedDict()
+RESULT_LOCK = Lock()
+MAX_RECENT_RESULTS = 24
+
+
+def store_result(key, data):
+    token = uuid.uuid4().hex
+    now = time()
+    with RESULT_LOCK:
+        previous = session.get(key)
+        if isinstance(previous, str):
+            RECENT_RESULTS.pop(previous, None)
+        while RECENT_RESULTS and (
+            len(RECENT_RESULTS) >= MAX_RECENT_RESULTS
+            or next(iter(RECENT_RESULTS.values()))[0] < now - MEDIA_TTL
+        ):
+            RECENT_RESULTS.popitem(last=False)
+        RECENT_RESULTS[token] = (now, make_json_safe(data))
+    session[key] = token
+
+
+def get_result(key):
+    token = session.get(key)
+    if not isinstance(token, str):
+        return None
+    with RESULT_LOCK:
+        item = RECENT_RESULTS.get(token)
+        if item and item[0] >= time() - MEDIA_TTL:
+            return item[1]
+        RECENT_RESULTS.pop(token, None)
+    return None
+
+
+def clear_session():
+    with RESULT_LOCK:
+        for key in RESULT_KEYS:
+            token = session.get(key)
+            if isinstance(token, str):
+                RECENT_RESULTS.pop(token, None)
+    session.clear()
+
+
+@app.before_request
+def block_archived_media():
+    if request.endpoint == "static":
+        parts = Path(request.view_args["filename"]).parts
+        if parts and parts[0] in {"uploads", "explanations"}:
+            abort(404)
+
+
+class InvalidImage(ValueError):
+    pass
+
+
+def analyze_upload(upload):
+    extension = Path(upload.filename).suffix.lower()
+    if extension not in IMAGE_FORMATS:
+        raise InvalidImage("Use a BMP, PNG, JPG, or JPEG image.")
+    try:
+        with Image.open(upload.stream, formats=[IMAGE_FORMATS[extension]]) as img:
+            if img.width * img.height > 16_000_000:
+                raise InvalidImage("Use an image with at most 16 million pixels.")
+            img.verify()
+        upload.stream.seek(0)
+    except (OSError, SyntaxError, Image.DecompressionBombError) as exc:
+        raise InvalidImage("The upload is not a readable image of that type.") from exc
+
+    cutoff = time() - MEDIA_TTL
+    recent = []
+    for folder in MEDIA_ROOT.iterdir():
+        try:
+            modified = folder.stat().st_mtime
+        except FileNotFoundError:
+            continue
+        if modified < cutoff:
+            rmtree(folder, ignore_errors=True)
+        else:
+            recent.append((modified, folder))
+    for _, folder in sorted(recent, reverse=True)[MAX_MEDIA_SETS - 1:]:
+        rmtree(folder, ignore_errors=True)
+
+    media_id = uuid.uuid4().hex
+    folder = MEDIA_ROOT / media_id
+    folder.mkdir()
+    original = f"scan{extension}"
+    try:
+        upload.save(folder / original)
+        output = explain_image(folder / original, folder / "heatmap.png")
+    except Exception:
+        rmtree(folder, ignore_errors=True)
+        raise
+    return {"media_id": media_id, "image_file": original, "explanation_image": "heatmap.png"}, output
+
+
+def assessment_media_url(result, field):
+    return url_for("assessment_media", media_id=result["media_id"], filename=result[field])
+
+
+@app.get("/assessment-media/<media_id>/<filename>")
+def assessment_media(media_id, filename):
+    if "email" not in session:
+        abort(404)
+    results = (
+        get_result("last_image_result") or {},
+        (get_result("last_combined_result") or {}).get("image", {}),
+    )
+    if not any(
+        data.get("media_id") == media_id
+        and filename in (data.get("image_file"), data.get("explanation_image"))
+        for data in results
+    ):
+        abort(404)
+    folder = MEDIA_ROOT / media_id
+    try:
+        if folder.stat().st_mtime < time() - MEDIA_TTL:
+            abort(404)
+    except FileNotFoundError:
+        abort(404)
+    response = send_from_directory(folder, filename, conditional=False)
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+def connect_db():
+    if DATABASE_URL:
+        import psycopg
+        from psycopg.conninfo import conninfo_to_dict
+
+        options = {"connect_timeout": 15, "prepare_threshold": None}
+        if not ON_CLOUD_RUN:
+            return psycopg.connect(DATABASE_URL, **options)
+        try:
+            settings = conninfo_to_dict(DATABASE_URL)
+        except psycopg.Error:
+            raise RuntimeError("Use the app-only Neon URL from the setup script.") from None
+        host = settings.get("host", "")
+        if (
+            not re.fullmatch(r"ep-[a-z0-9-]+-pooler\.[a-z0-9.-]+\.neon\.tech", host)
+            or settings.get("user") != "cerviai_app"
+            or not all(settings.get(key) for key in ("dbname", "password"))
+        ):
+            raise RuntimeError("Cloud Run requires the pooled Neon URL for the cerviai_app role.")
+        # Select only these connection fields; don't accept TLS or libpq overrides from the URL.
+        return psycopg.connect(
+            host=host, user="cerviai_app", dbname=settings["dbname"], password=settings["password"],
+            sslmode="verify-full", sslrootcert="system", channel_binding="require", **options,
+        )
+    return sqlite3.connect("database.db", timeout=10)
+
+
+def db_statement(sql):
+    # Only fixed SQL strings enter here. Values stay separate and parameterized.
+    return sql.replace("?", "%s") if DATABASE_URL else sql
+
+
+@contextmanager
+def database():
+    # SQLite's own context manager commits/rolls back but does not close.
+    with closing(connect_db()) as conn, conn:
+        yield conn
 
 
 def init_db():
+    with database() as conn:
+        if DATABASE_URL:
+            # Cloud runtime isn't a schema owner. Fail startup if provisioning hasn't been done.
+            if ON_CLOUD_RUN:
+                elevated = conn.execute("""
+                    SELECT has_schema_privilege('public', 'CREATE') OR EXISTS (
+                        SELECT 1 FROM pg_roles WHERE rolname = 'neon_superuser' AND pg_has_role(oid, 'MEMBER')
+                    )
+                """).fetchone()[0]
+                if elevated:
+                    raise RuntimeError("Use the restricted Neon role created by prepare_neon.py, not an administrative role.")
+            conn.execute("SELECT id, username, email, password FROM public.users LIMIT 0")
+            conn.execute("SELECT id, email, risk_level, probability, created_at FROM public.results LIMIT 0")
+            writable = conn.execute("""
+                SELECT has_table_privilege('public.users', 'INSERT')
+                   AND has_table_privilege('public.results', 'INSERT')
+            """).fetchone()[0]
+            if not writable:
+                raise RuntimeError("The app database login must be able to insert users and results.")
+            return
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT,
+                email TEXT UNIQUE,
+                password TEXT
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT,
+                risk_level TEXT,
+                probability DOUBLE PRECISION,
+                created_at TEXT
+            )
+        """)
 
-    conn = sqlite3.connect("database.db")
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=10000")
-    cur = conn.cursor()
 
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT,
-        email TEXT UNIQUE,
-        password TEXT
-    )
-    """)
-
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS results (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        email TEXT,
-        risk_level TEXT,
-        probability REAL,
-        created_at TEXT
-    )
-    """)
-
-    conn.commit()
-    conn.close()
+def save_history(email, risk_level, probability):
+    with database() as conn:
+        conn.execute(db_statement(f"""
+            INSERT INTO {RESULTS_TABLE} (email, risk_level, probability, created_at)
+            VALUES (?, ?, ?, ?)
+        """), (email, risk_level, probability, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
 
 
 init_db()
+_media_directory = TemporaryDirectory(prefix="cerviai-media-")
+MEDIA_ROOT = Path(_media_directory.name)
 
 
 @app.route("/")
@@ -130,6 +397,9 @@ def signup():
                 error="Please fill all required fields."
             )
 
+        if len(username) > 100 or len(email) > 254 or not 12 <= len(password) <= 128:
+            return render_template("signup.html", error="Use a password of 12–128 characters and a short name and email."), 400
+
         if password != confirm_password:
 
             return render_template(
@@ -137,44 +407,18 @@ def signup():
                 error="Passwords do not match."
             )
 
-        conn = sqlite3.connect(
-            "database.db"
-        )
+        password_hash = generate_password_hash(password)
+        with database() as conn:
+            created = conn.execute(db_statement(f"""
+                INSERT INTO {USERS_TABLE} (username, email, password)
+                VALUES (?, ?, ?)
+                ON CONFLICT (email) DO NOTHING
+            """), (username, email, password_hash)).rowcount
 
-        cur = conn.cursor()
+        if not created:
+            return render_template("signup.html", error="Email already registered!")
 
-        cur.execute(
-            "SELECT * FROM users WHERE email=?",
-            (email,)
-        )
-
-        existing_user = cur.fetchone()
-
-        if existing_user:
-
-            conn.close()
-
-            return render_template(
-                "signup.html",
-                error="Email already registered!"
-            )
-
-        cur.execute("""
-        INSERT INTO users (
-            username,
-            email,
-            password
-        )
-        VALUES (?, ?, ?)
-        """, (
-            username,
-            email,
-            password
-        ))
-
-        conn.commit()
-        conn.close()
-
+        clear_session()
         session["email"] = email
         session["username"] = username
 
@@ -203,29 +447,19 @@ def signin():
             "password"
         )
 
-        conn = sqlite3.connect(
-            "database.db"
-        )
+        if not email or not password or len(email) > 254 or len(password) > 128:
+            return render_template("signin.html", error="Invalid Email or Password!")
 
-        cur = conn.cursor()
+        with database() as conn:
+            user = conn.execute(db_statement(
+                f"SELECT username, password FROM {USERS_TABLE} WHERE email=?"
+            ), (email,)).fetchone()
 
-        cur.execute("""
-        SELECT *
-        FROM users
-        WHERE email=? AND password=?
-        """, (
-            email,
-            password
-        ))
+        if user and check_password_hash(user[1] or "", password or ""):
 
-        user = cur.fetchone()
-
-        conn.close()
-
-        if user:
-
+            clear_session()
             session["email"] = email
-            session["username"] = user[1]
+            session["username"] = user[0]
 
             return redirect(
                 url_for("choose")
@@ -369,19 +603,7 @@ def predict():
         values
     )
 
-    explanation_text = create_clinical_explanation(
-        result
-    )
-
     probability = float(result["probability"])
-    factors = [
-    {
-        "name": item["feature"],
-        "contribution": float(item["influence"]),
-        "direction": item["direction"]
-    }
-    for item in result["explanations"]
-]
     if probability >= 70:
 
         risk_level = "High Risk"
@@ -440,25 +662,14 @@ def predict():
         ]
 
     
-    session["risk_level"] = risk_level
-    session["prob_percent"] = float(probability)
-
-    session["last_result"] = make_json_safe({
-    "result_key": str(uuid.uuid4()),
-    "risk_level": risk_level,
-    "prob_percent": probability,
-    "prediction": result["prediction"],
-    "advice": advice,
-    "explanations": result["explanations"],
-    "factors": factors,
-    "explanation_text": explanation_text
-})
-
-
-    return redirect(
-        url_for("result")
-    )
-
+    save_history(session["email"], risk_level, probability)
+    store_result("last_result", {
+        "risk_level": risk_level,
+        "prob_percent": probability,
+        "advice": advice,
+        "explanations": result["explanations"],
+    })
+    return redirect(url_for("result"))
 
 
 @app.route("/result")
@@ -466,33 +677,10 @@ def result():
     if "email" not in session:
         return redirect(url_for("signin"))
 
-    data = session.get("last_result")
+    data = get_result("last_result")
 
     if not data:
         return redirect(url_for("details"))
-
-    result_key = data.get("result_key")
-
-    # Avoid saving the same assessment again on refresh.
-    if result_key and session.get("saved_result_key") != result_key:
-        conn = sqlite3.connect("database.db")
-        cur = conn.cursor()
-
-        cur.execute("""
-            INSERT INTO results
-                (email, risk_level, probability, created_at)
-            VALUES (?, ?, ?, ?)
-        """, (
-            session["email"],
-            data["risk_level"],
-            float(data["prob_percent"]),
-            datetime.now().strftime("%d-%m-%Y %H:%M")
-        ))
-
-        conn.commit()
-        conn.close()
-
-        session["saved_result_key"] = result_key
 
     return render_template(
         "result.html",
@@ -543,12 +731,6 @@ def predict_combined():
     if image is None or image.filename == "":
         return "Please select a cervical-cell image.", 400
 
-    original_filename = secure_filename(image.filename)
-    extension = os.path.splitext(original_filename)[1].lower()
-
-    if extension not in {".bmp", ".png", ".jpg", ".jpeg"}:
-        return "Use a BMP, PNG, JPG, or JPEG image.", 400
-
     # --------------------------------------------------
     # 1. Clinical model
     # --------------------------------------------------
@@ -592,25 +774,8 @@ def predict_combined():
     # --------------------------------------------------
     # 2. Image model
     # --------------------------------------------------
-    timestamp = datetime.now().strftime("%Y%m%d%H%M%S%f")
-
-    image_filename = f"combined_{timestamp}{extension}"
-    explanation_filename = f"combined_explanation_{timestamp}.png"
-
-    image_path = os.path.join(UPLOAD_FOLDER, image_filename)
-
-    heatmap_file_path = os.path.join(
-        EXPLANATION_FOLDER,
-        explanation_filename
-    )
-
     try:
-        image.save(image_path)
-
-        image_output = explain_image(
-            image_path,
-            heatmap_file_path
-        )
+        media, image_output = analyze_upload(image)
 
         clinical_indicator = clinical_level.lower().replace(
             " risk", ""
@@ -635,6 +800,8 @@ def predict_combined():
             )
         )
 
+    except InvalidImage as exc:
+        return str(exc), 400
     except Exception:
         app.logger.exception("ViT image explanation failed")
         return (
@@ -645,7 +812,7 @@ def predict_combined():
     # --------------------------------------------------
     # 3. Store both model outputs
     # --------------------------------------------------
-    session["last_combined_result"] = make_json_safe({
+    combined_data = {
         "clinical": {
             "risk_level": clinical_level,
             "prob_percent": round(probability, 2),
@@ -655,7 +822,7 @@ def predict_combined():
         },
 
         "image": {
-            "image_file": image_filename,
+            **media,
             "class_name": image_output["predicted_cell_type"],
             "confidence": image_output.get("confidence"),
             "abnormality_score": image_output["abnormality_score"],
@@ -663,7 +830,6 @@ def predict_combined():
             "recommendation": image_output["recommendation"],
             "explained_target": image_output["explained_target"],
             "top_regions": image_output["top_regions"],
-            "explanation_image": explanation_filename,
 
             "heatmap_message": (
                 "The heatmap highlights image regions that influenced "
@@ -687,7 +853,7 @@ def predict_combined():
                 if mismatch_alert else ""
             )
         }
-    })
+    }
 
     # --------------------------------------------------
     # 4. Generate a polished explanation using the LLM
@@ -808,13 +974,11 @@ Return only the interpretation in plain text.
             ],
             temperature=0.4,
             max_tokens=1000
-        )
+        ) if client is not None else None
 
-        generated_text = response.choices[0].message.content
+        generated_text = response.choices[0].message.content if response else None
 
         if generated_text and generated_text.strip():
-            import re
-
             cleaned_text = generated_text.strip()
 
             # Remove escaped and unescaped Markdown formatting
@@ -848,39 +1012,11 @@ Return only the interpretation in plain text.
 
 
     except Exception:
-        app.logger.exception("Combined AI explanation failed")
+        app.logger.warning("Combined AI explanation failed")
 
-    # --------------------------------------------------
-    # 5. Save the generated explanation in the session
-    # --------------------------------------------------
-    session["last_combined_result"]["combined_explanation"] = (
-        combined_explanation
-    )
-    session.modified = True
-
-    # --------------------------------------------------
-    # 6. Save assessment history
-    # --------------------------------------------------
-    try:
-        with sqlite3.connect("database.db") as conn:
-            conn.execute(
-                """
-                INSERT INTO results
-                    (email, risk_level, probability, created_at)
-                VALUES (?, ?, ?, ?)
-                """,
-                (
-                    session["email"],
-                    clinical_level,
-                    round(probability, 2),
-                    datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                )
-            )
-
-    except Exception:
-        app.logger.exception("Could not save combined assessment")
-
-    # Redirect only after all processing is complete
+    combined_data["combined_explanation"] = combined_explanation
+    save_history(session["email"], clinical_level, round(probability, 2))
+    store_result("last_combined_result", combined_data)
     return redirect(url_for("combined_result"))
 
 
@@ -889,7 +1025,7 @@ def combined_result():
     if "email" not in session:
         return redirect(url_for("signin"))
 
-    combined = session.get("last_combined_result")
+    combined = get_result("last_combined_result")
 
     if not combined:
         return redirect(url_for("combined_assessment"))
@@ -897,17 +1033,11 @@ def combined_result():
     clinical = combined.get("clinical", {})
     image = combined.get("image", {})
 
-    image_path = url_for(
-        "static",
-        filename="uploads/" + image.get("image_file", "")
-    )
+    if not image.get("media_id"):
+        return redirect(url_for("combined_assessment"))
+    image_path = assessment_media_url(image, "image_file")
+    heatmap_path = assessment_media_url(image, "explanation_image")
 
-    heatmap_path = url_for(
-        "static",
-        filename="explanations/" + image.get("explanation_image", "")
-    )
-
-    
     return render_template(
     "combined_result.html",
     clinical=clinical,
@@ -930,28 +1060,10 @@ def predict_image():
     if image is None or image.filename == "":
         return "Please select an image to upload.", 400
 
-    original_filename = secure_filename(image.filename)
-    extension = os.path.splitext(original_filename)[1].lower()
-
-    if extension not in {".bmp", ".png", ".jpg", ".jpeg"}:
-        return "Please upload a BMP, PNG, JPG, or JPEG image.", 400
-
-    timestamp = datetime.now().strftime("%Y%m%d%H%M%S%f")
-    image_filename = f"{timestamp}{extension}"
-    explanation_filename = f"explanation_{timestamp}.png"
-
-    image_path = os.path.join(UPLOAD_FOLDER, image_filename)
-    heatmap_file_path = os.path.join(
-        EXPLANATION_FOLDER, explanation_filename
-    )
-
     try:
-        image.save(image_path)
-        result = explain_image(image_path, heatmap_file_path)
-
-        session["last_image_result"] = make_json_safe({
-            "image_file": image_filename,
-            "explanation_image": explanation_filename,
+        media, result = analyze_upload(image)
+        store_result("last_image_result", {
+            **media,
             "predicted_cell_type": result["predicted_cell_type"],
             "class_name": result["predicted_cell_type"],
             "confidence": result.get("confidence"),
@@ -971,6 +1083,8 @@ def predict_image():
                 result["recommendation"]
             ]
         })
+    except InvalidImage as exc:
+        return str(exc), 400
     except Exception:
         app.logger.exception("Image analysis failed")
         return "Image analysis failed. Check the Flask terminal.", 500
@@ -984,18 +1098,12 @@ def image_result():
     if "email" not in session:
         return redirect(url_for("signin"))
 
-    data = session.get("last_image_result")
-    if not data:
+    data = get_result("last_image_result")
+    if not data or not data.get("media_id"):
         return redirect(url_for("image_upload"))
 
-    image_path = url_for(
-        "static",
-        filename="uploads/" + data["image_file"]
-    )
-    heatmap_path = url_for(
-        "static",
-        filename="explanations/" + data["explanation_image"]
-    )
+    image_path = assessment_media_url(data, "image_file")
+    heatmap_path = assessment_media_url(data, "explanation_image")
 
     risk = str(data.get("risk_indicator", "Unavailable")).strip().lower()
 
@@ -1035,14 +1143,14 @@ def api_image_result():
     if "email" not in session:
         return {"error": "Please sign in first."}, 401
 
-    data = session.get("last_image_result")
+    data = get_result("last_image_result")
 
-    if not data:
+    if not data or not data.get("media_id"):
         return {"error": "No image results found."}, 404
 
     # Clinical risk comes from the clinical assessment,
     # NOT from the ViT cell-classification confidence.
-    clinical = session.get("last_result")
+    clinical = get_result("last_result")
 
     risk_level = None
     risk_percent = None
@@ -1055,14 +1163,8 @@ def api_image_result():
         "class_name": data["class_name"],
         "confidence": data["confidence"],
         "explanation": data.get("explanation", []),
-        "image_url": url_for(
-            "static",
-            filename="uploads/" + data["image_file"]
-        ),
-        "explanation_url": url_for(
-            "static",
-            filename="explanations/" + data["explanation_image"]
-        ),
+        "image_url": assessment_media_url(data, "image_file"),
+        "explanation_url": assessment_media_url(data, "explanation_image"),
         "risk_level": risk_level,
         "risk_percent": risk_percent
     }
@@ -1073,7 +1175,7 @@ def full_report():
     if "email" not in session:
         return redirect(url_for("signin"))
 
-    image_result = session.get("last_image_result")
+    image_result = get_result("last_image_result")
 
     if not image_result:
         return redirect(url_for("image_upload"))
@@ -1081,57 +1183,7 @@ def full_report():
     return render_template(
         "full_report.html",
         image_result=image_result,
-        clinical_result=session.get("last_result")
-    )
-
-
-@app.route(
-    "/save_result",
-    methods=["GET", "POST"]
-)
-def save_result():
-
-    if "email" not in session:
-
-        return redirect(
-            url_for("signin")
-        )
-
-    if "risk_level" not in session:
-
-        return redirect(
-            url_for("details")
-        )
-
-    conn = sqlite3.connect(
-        "database.db"
-    )
-
-    cur = conn.cursor()
-
-    cur.execute("""
-    INSERT INTO results (
-        email,
-        risk_level,
-        probability,
-        created_at
-    )
-    VALUES (?, ?, ?, ?)
-    """, (
-        session["email"],
-        session["risk_level"],
-        session["prob_percent"],
-        datetime.now().strftime(
-            "%d-%m-%Y %H:%M"
-        )
-    ))
-
-    conn.commit()
-    conn.close()
-
-    return redirect(
-        request.referrer or
-        url_for("result")
+        clinical_result=get_result("last_result")
     )
 
 
@@ -1144,27 +1196,11 @@ def history():
             url_for("signin")
         )
 
-    conn = sqlite3.connect(
-        "database.db"
-    )
-
-    cur = conn.cursor()
-
-    cur.execute("""
-    SELECT
-        risk_level,
-        probability,
-        created_at
-    FROM results
-    WHERE email=?
-    ORDER BY id DESC
-    """, (
-        session["email"],
-    ))
-
-    rows = cur.fetchall()
-
-    conn.close()
+    with database() as conn:
+        rows = conn.execute(db_statement(f"""
+            SELECT risk_level, probability, created_at
+            FROM {RESULTS_TABLE} WHERE email=? ORDER BY id DESC
+        """), (session["email"],)).fetchall()
 
     return render_template(
         "history.html",
@@ -1181,28 +1217,11 @@ def compare():
             url_for("signin")
         )
 
-    conn = sqlite3.connect(
-        "database.db"
-    )
-
-    cur = conn.cursor()
-
-    cur.execute("""
-    SELECT
-        risk_level,
-        probability,
-        created_at
-    FROM results
-    WHERE email=?
-    ORDER BY id DESC
-    LIMIT 2
-    """, (
-        session["email"],
-    ))
-
-    rows = cur.fetchall()
-
-    conn.close()
+    with database() as conn:
+        rows = conn.execute(db_statement(f"""
+            SELECT risk_level, probability, created_at
+            FROM {RESULTS_TABLE} WHERE email=? ORDER BY id DESC LIMIT 2
+        """), (session["email"],)).fetchall()
 
     if len(rows) < 2:
 
@@ -1233,22 +1252,33 @@ def compare():
     )
 
 
-@app.route("/logout")
+@app.route("/logout", methods=["GET", "POST"])
 def logout():
-
-    session.clear()
-
-    return redirect(
-        url_for("home")
-    )
+    if "email" not in session:
+        return redirect(url_for("home"))
+    if request.method == "GET":
+        return render_template("logout.html")
+    clear_session()
+    return redirect(url_for("home"))
 
 
 @app.route("/clinical-result-chat", methods=["POST"])
 def clinical_result_chat():
-    data = request.get_json(silent=True) or {}
+    if "email" not in session:
+        return jsonify({"answer": "Please sign in first."}), 401
 
-    question = data.get("question", "").strip()
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or not isinstance(data.get("question"), str):
+        return jsonify({"answer": "Please enter a question."}), 400
+
+    question = data["question"].strip()
     result_context = data.get("result_context", "")
+    if isinstance(result_context, dict):
+        result_context = app.json.dumps(result_context)
+    if not isinstance(result_context, str):
+        return jsonify({"answer": "Result context must be text or a JSON object."}), 400
+    if len(question) > 2000 or len(result_context) > 8000:
+        return jsonify({"answer": "Please shorten your question or result context."}), 400
 
     if not question:
         return jsonify({"answer": "Please enter a question."}), 400
@@ -1264,6 +1294,9 @@ def clinical_result_chat():
                 "I provide educational information, not a diagnosis."
             )
         })
+
+    if client is None:
+        return jsonify({"answer": "The Groq assistant is not configured for this demo."}), 503
 
     try:
         response = client.chat.completions.create(
@@ -1303,13 +1336,10 @@ def clinical_result_chat():
         return jsonify({"answer": answer})
 
     except Exception:
-        app.logger.exception("Clinical result chatbot request failed")
+        app.logger.warning("Clinical result chatbot request failed")
         return jsonify({
             "answer": "The assistant is temporarily unavailable. Please try again."
         }), 503
 
 if __name__ == "__main__":
-
-    app.run(
-        debug=True
-    )
+    app.run()

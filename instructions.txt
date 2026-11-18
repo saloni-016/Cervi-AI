@@ -1,0 +1,368 @@
+CERVIAI: GITHUB PAGES, CLOUD RUN, AND NEON FREE
+=============================================
+Beginner walkthrough | 18 November 2026
+
+WHAT THIS SETUP DOES
+
+  Public landing page: https://saloni-016.github.io/Cervi-AI/
+    -> Open demo on Cloud Run
+    -> Flask sign-in, assessment, and history at the HTTPS run.app URL
+    -> Cloud Run connects to Neon Free PostgreSQL on the server
+
+GitHub Actions builds and checks the CPU container, stores it in GitHub
+Container Registry (GHCR), and can update Cloud Run. A separate GitHub
+Actions workflow publishes just the static landing page to GitHub Pages.
+Use github.io (not gihub.io). Your Pages address will work only after
+Step 7 and includes the repository name, /Cervi-AI/.
+
+GitHub Pages cannot run this Flask app, Docker or Python inference. The
+address bar changes to run.app when you open the demo. The public Pages
+site does not accept credentials, run scripts, or connect to Neon. You do
+not need to enable cross-origin access to the app or expose Neon to the
+browser. These source files already include the setup; do not apply an old
+patch. Vercel is not part of this deployment.
+
+BEFORE YOU START
+
+- Use a dedicated Neon Free project. A free database is not a database
+  anyone can read. The setup creates a separate login that can read and
+  insert the app's rows but cannot manage its tables or roles. Cloud Run
+  verifies the database hostname and uses TLS and channel binding. The
+  owner URL is for one-time setup only. https://neon.com/docs/introduction/plans
+- Cloud Run needs a Google Cloud billing account. Its free usage allowance
+  is not a promise of zero charges. This setup requests 2 CPUs and 4 GiB RAM,
+  no GPU, request-based billing, and zero idle minimum instances. Budget
+  alerts do not stop spending. Set a budget before hosting anything and
+  stop here if you cannot accept possible charges.
+  https://cloud.google.com/run/pricing
+- Standard GitHub Actions runners are free for public repos. Each image
+  build also downloads the ~343 MB image-model checkpoint through Git LFS;
+  downloads count against the repo owner's separate quota. The workflow
+  runs only when you click Run workflow. GHCR is separate from Git LFS.
+  https://docs.github.com/en/billing/concepts/product-billing/git-lfs
+- You will have to make the container package public for this direct Cloud
+  Run import. Before publishing it, confirm you may redistribute the app,
+  its artwork and its model weights. The public package contains runnable
+  code and weights, not your passwords, database, or the old sample uploads.
+  Never make a private repository public to follow these instructions.
+  https://docs.cloud.google.com/run/docs/deploying
+- Demo only. Use invented names, emails and questionnaire answers, plus an
+  image you have permission to use. Do not upload patient data or use real
+  account passwords. Latest detailed reports and images are temporary and
+  stored on the app server, not in browser cookies. Cookies only hold login
+  information, form tokens, and references to results. Groq is optional;
+  leave it off at first so no demo details are sent to it.
+- You need permission to manage this repository and its GitHub packages,
+  a Neon account, a Google Cloud account that can create and bill its own
+  project, and a web browser. Never post account passwords, the Neon URL,
+  or API keys in GitHub files, chat, screenshots or normal shell commands.
+  Do not run any of the credential steps while screen sharing. Before
+  publishing, review existing tracked images for patient data or material
+  you cannot share. Excluding them from the container/Pages does not remove
+  them from the repo or its history.
+
+STEP 1 OF 8 - PUT THE DEPLOYMENT FILES ON GITHUB
+
+1. Open saloni-016/Cervi-AI on GitHub (or your own authorized copy). Select
+   the branch containing this change. Check for Dockerfile and
+   requirements-base.txt, the deploy folder, and both deploy-cloud-run.yml
+   and deploy-pages.yml inside .github/workflows/.
+   There should not be a vercel.json file on this branch. If the changes
+   are only in your workspace, publish that branch first; opening this
+   text file alone does not change your GitHub repository.
+2. If these files are not yet on the default branch, use Compare & pull
+   request (or Pull requests > New pull request). Select the default
+   branch (main in this repo) as the base and the existing change branch
+   as the compare branch. Review the Files changed tab, then create the
+   pull request. A repository maintainer can merge it after review. Check
+   the files are visible on main afterward. Doing this does not deploy.
+3. The Run workflow buttons appear when the workflow files are on the
+   default branch. No GitHub personal access token or Google service-account
+   key file is needed. You will turn on GitHub Pages separately in Step 7.
+   https://docs.github.com/en/actions/using-workflows/manually-running-a-workflow
+
+STEP 2 OF 8 - BUILD THE FIRST CONTAINER ON GITHUB
+
+1. In the GitHub repo, open Actions. Enable Actions if GitHub asks and you
+   are in the right repository. Choose Publish CerviAI demo on the left,
+   then Run workflow. Select the default branch (main). Leave Update the
+   existing Cloud Run service UNCHECKED, then click Run workflow.
+2. Open the new run. The publish job checks the LFS checkpoint against its
+   hash, builds the CPU container, checks installed Python packages for
+   known advisories, and smoke-tests the actual web server and model files.
+   These checks do not prove the app is suitable for healthcare. Wait for
+   the publish job to turn green. The deploy job should be skipped. In the
+   run's Summary, write down Image, Repository ID, Owner ID and Branch. Copy
+   the whole Image value, including the @sha256:... ending. None of these
+   four values is a password.
+3. Open the repo's Packages section (or the owner profile > Packages) and
+   choose its container, usually cervi-ai. The package may start Private
+   even if the repo is public. In Package settings > Danger Zone > Change
+   visibility, change it to Public only if you have the rights to publish
+   its contents. This change cannot be undone by switching back to Private.
+   If you cannot publish the package, keep it private and stop here; this
+   version of the setup needs a public container, not public secrets.
+   https://docs.github.com/en/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility
+
+STEP 3 OF 8 - CREATE THE FREE NEON DATABASE AND APP LOGIN
+
+1. Go to https://console.neon.tech. Sign in and choose Free (not a paid
+   upgrade). Create a dedicated project named cerviai-demo. Pick a US
+   region near us-central1 if practical. Keep the default database and
+   branch. Do not turn on Neon Auth or the Data API for this app.
+2. In Neon click Connect. Pick the database owner (usually neondb_owner),
+   the database and branch you just created, and switch Connection pooling
+   OFF for this one-time step. Copy only the raw postgresql:// URL, not the
+   surrounding psql command or quotes. The URL is a password; you will paste
+   it only into a hidden prompt. Never put it into a GitHub variable.
+3. In GitHub on the default branch, open deploy > prepare_neon.py. Click
+   Download raw file (or Raw and save it as prepare_neon.py). In the Google
+   Cloud Console, click Activate Cloud Shell (>_). It's an online terminal.
+   In its three-dot menu select Upload file, choose the script, and upload
+   it to the default location (your home directory). This script only
+   prepares Neon; it does not create or deploy a Cloud Run service.
+4. In that private Cloud Shell session, run these three lines in order:
+
+      python3 -m venv ~/cerviai-neon-setup
+      ~/cerviai-neon-setup/bin/python -m pip install 'psycopg[binary]==3.3.9'
+      ~/cerviai-neon-setup/bin/python ~/prepare_neon.py
+
+   At the hidden prompt paste the direct owner URL from above. Check the
+   database name and host in the confirmation, then type YES if correct.
+   The script prepares two tables and creates the limited cerviai_app login.
+   Do not create that login via the Neon dashboard; dashboard-created roles
+   have broader privileges. Use a dedicated project with no patient data.
+5. Copy the app-only URL printed once by the script, starting with
+   postgresql://cerviai_app:. Store it in your password manager for Step 4.
+   The host has -pooler and the URL ends with verified TLS settings. Do not
+   share this output. A second setup run will not reset an existing role;
+   keep the app-only URL. If it is lost, ask the database owner to rotate
+   that role's password; do not drop the role or tables to start over.
+6. Do not upload database.db or old user rows. This guide uses a new database.
+   Cloud Run checks that the tables already exist. A local run can still
+   use SQLite. Old plaintext passwords are not accepted; use new demo logins.
+
+   https://neon.com/docs/manage/roles
+   https://neon.com/docs/connect/connect-securely
+
+STEP 4 OF 8 - CREATE THE FIRST CLOUD RUN WEBSITE
+
+1. Go to https://console.cloud.google.com. Use the project selector > New
+   Project to create a dedicated project such as CerviAI Demo. Select it,
+   and copy the Project ID (the hyphenated ID, not the display name or the
+   project number). Link it to your own billing account only if you accept
+   the possible charges above. Do not use a project that contains other apps.
+2. Go to Billing > Budgets & alerts > Create budget. Scope it to the demo
+   project and set a small amount and email alerts. If you want the Cloud
+   Run spend cap, create a separate monthly budget scoped to this project
+   and the Cloud Run service, then enable the option to pause Cloud Run at
+   the threshold. It is based on estimated costs and does not cap other
+   Google services. Check Billing Reports even if you configured a cap.
+   https://docs.cloud.google.com/billing/docs/how-to/budgets-spend-caps
+3. Generate a random invitation password of at least 24 characters using a
+   password manager. It is different from GitHub, Google and the app login
+   password. Share it only with invited demo testers.
+4. In GitHub, on the default branch, open deploy > first-deploy.sh. Use
+   Download raw file (or click Raw and save it as first-deploy.sh). In the
+   Google Console, click Activate Cloud Shell (the >_ icon). This is an
+   online terminal. Authorize it if prompted. Select its three-dot menu >
+   Upload file, choose the script, and upload it to the default home folder.
+5. In Cloud Shell, type this line and press Enter:
+
+      bash ~/first-deploy.sh
+
+   Enter the project ID, Image from Step 2, the app-only Neon URL from
+   Step 3 (not the owner URL), and the invitation password. At the Groq
+   prompt press Enter to leave it off. It's normal for the last three
+   inputs not to appear on the screen.
+   Read the confirmation line, confirm the project ID and type YES if you
+   want to proceed. The script saves settings to Google Secret Manager and
+   creates cerviai-demo in us-central1. It generates a separate session
+   signing key for you. It does not create Vercel resources.
+6. Wait for Service URL to appear. You can also find it at Cloud Run >
+   Services > cerviai-demo. Open the HTTPS run.app address in a new private
+   browser window. A browser sign-in prompt should appear; use username
+   demo and the invitation password. If the landing page opens without
+   that prompt, stop and check your configuration before sharing the URL.
+   /healthz only returns "ok" and is intentionally accessible for startup
+   checks. Copy this exact Service URL for the Pages link in Step 7. The
+   endpoint is internet-reachable, so limit it to demo use.
+   If your organization's policy blocks public Cloud Run URLs, do not
+   weaken the policy; use a separately approved private setup instead.
+
+STEP 5 OF 8 - CHECK IT USING ONLY DEMO DATA
+
+1. On the website, click Sign up. Use an invented email (e.g.
+   demo@example.invalid) and a new password of at least 12 characters.
+   Sign out (including confirmation) and back in. The browser invitation
+   and the app's signup/sign-in are separate.
+2. Open Clinical Assessment. Fill in invented values and submit. Open
+   History; the new score should appear. Reload the result page once and
+   verify that normal refresh does not add another row.
+3. In your Neon project, open Tables. Use the database and branch from
+   Step 3 and select the public schema. Verify users and results exist.
+   The word "public" here is a schema name, not an instruction to allow
+   anonymous access. Don't share rows, connection strings or hashes.
+4. Try Cell Image Analysis with a small BMP, PNG, JPG or JPEG you are
+   allowed to use. Keep the file well below 10 MiB (the whole request limit)
+   and at most 16 million pixels. Verify the class and heatmap, then try
+   Combined Assessment and check two separate scores. Inference can take
+   longer than the clinical form. An unavailable AI interpretation with
+   Groq off is expected; the models still run. The upload and overlay are
+   visible only in your signed-in assessment session. They do not persist
+   in Neon and can expire, be replaced, or disappear when Cloud Run
+   restarts or scales to zero. Detailed report pages also expire; saved
+   clinical score summaries still appear in History. Sign out when finished.
+5. Optional: If you enable Groq at setup, check your plan and use a key
+   from https://console.groq.com/keys. Combined explanations and chat can
+   send clinical text to Groq (not the raw image). Do not use identifying
+   or clinical patient details. Leave Groq disabled unless you want this
+   transfer. https://console.groq.com/docs/rate-limits
+
+STEP 6 OF 8 - ALLOW FUTURE DEPLOYMENTS FROM GITHUB
+
+Before linking Google, protect main. In GitHub Settings > Rules > Rulesets
+(or Settings > Branches), require pull requests for the default branch and
+require an independent review if you have a second trusted maintainer.
+Restrict who can push, merge or edit Actions settings. Review workflow,
+Dockerfile, dependency and model changes before merging. If you cannot
+control who changes main, skip this step and deploy manually; someone who
+can change the deploy workflow can effectively change code that reads the
+runtime secrets. Do not give that capability to untrusted contributors.
+
+1. After the first site works, download deploy > connect-github.sh from
+   the default branch and upload it to Cloud Shell's home directory using
+   the same Download raw file and Upload file buttons as in Step 4. Run:
+
+      bash ~/connect-github.sh
+
+   Enter the same Google Project ID and the Repository ID, Owner ID and
+   Branch from the GitHub run's Summary. It authorizes short-lived Google
+   access for this specific workflow on the default branch. A fork, PR
+   or another branch cannot use this grant. The GitHub deploy identity is
+   separate from the runtime identity that loads Neon and demo secrets.
+   https://docs.cloud.google.com/iam/docs/workload-identity-federation-with-deployment-pipelines
+2. Copy the three identifiers printed by the script. In GitHub open your
+   repo's Settings > Secrets and variables > Actions > Variables. Click
+   New repository variable for each name; paste only the text after =:
+
+      GCP_PROJECT_ID     Your Google project ID
+      GCP_WIF_PROVIDER   The full projects/.../providers/... value
+      GCP_DEPLOYER_SA    The deployer service-account email address
+
+   These are not secrets. Do not enter DATABASE_URL, SECRET_KEY,
+   DEMO_PASSWORD or GROQ_API_KEY in GitHub. They stay in Secret Manager.
+3. Wait a few minutes for permissions to take effect. In Actions > Publish
+   CerviAI demo > Run workflow, select the default branch and now CHECK
+   Update the existing Cloud Run service. Confirm both jobs go green and
+   test the URL again. Check History with the same demo login: it should
+   retain your saved scores. The workflow updates the container, not the
+   database or secrets. It sends traffic to the exact tested revision,
+   not whatever revision happens to be latest.
+4. For later code changes, merge after review and run the workflow again
+   with the box checked. No build or deploy happens on ordinary pushes.
+
+STEP 7 OF 8 - PUBLISH THE DEFAULT GITHUB.IO LANDING PAGE
+
+1. Confirm the Cloud Run URL works and requests the demo invitation in a
+   private window. In the GitHub repo, open Settings > Pages. Under Build
+   and deployment, choose GitHub Actions as the Source, not Deploy from a
+   branch. Leave Custom domain empty to use GitHub's default URL.
+2. In Settings > Secrets and variables > Actions > Variables, click New
+   repository variable. Name it CERVIAI_APP_URL. For the value, paste the
+   exact Service URL from Step 4, beginning with https:// and ending with
+   .run.app (a final slash is okay). Do not paste a /signin path, a password,
+   a database URL, or the github.io address here. This value is public.
+3. In Actions choose Publish CerviAI landing page > Run workflow. Select
+   the default branch (main), then run it. After the deploy job turns green,
+   open the environment URL, or Settings > Pages > Visit site. For this
+   repo it should be https://saloni-016.github.io/Cervi-AI/. Use HTTPS.
+   The landing page should show its design and the Open demo link.
+4. Click Open demo on Cloud Run. Confirm the destination is the exact
+   run.app URL you set, then enter the demo invitation on that host only.
+   Sign in, submit only demo samples, and check History. A request for
+   credentials on github.io is not expected. Do not enter passwords there.
+5. Share the github.io link as the entry address, but only share the separate
+   invitation password with trusted testers. Run this Pages workflow again
+   only if the landing page or Service URL changes. It doesn't build the
+   Docker image, use Git LFS bandwidth, or need any Neon/Google secrets.
+
+   https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site
+
+STEP 8 OF 8 - DISCONNECT VERCEL, ROLL BACK, OR STOP THE DEMO
+
+- Removing vercel.json from the repo does not unlink a Vercel project. To
+  stop Vercel tracking GitHub, open the old cervi-ai project in Vercel,
+  check that it's connected to the right owner/repo, and go to Settings >
+  Git > Connected Git Repository > Disconnect. You can do this after you
+  verify the new site, or earlier if you want Vercel disconnected now.
+  You don't need to delete the project, domain or any old data. The GitHub
+  Pages link is separate and does not need the Vercel domain.
+  https://vercel.com/docs/project-configuration/git-settings
+- If a new version breaks, open Cloud Run > cerviai-demo > Revisions >
+  Manage traffic. Send 100% to the last working revision. That changes
+  the app version, not Neon data. A later checked GitHub run can move
+  traffic forward after the fix.
+- Keep an eye on GitHub LFS usage, Neon usage, and Cloud Billing. An idle
+  service may be slow on its next request. The invitation password does
+  not stop all requests from reaching Cloud Run, so it cannot cap charges.
+- To stop hosting, unpublish the site under GitHub Settings > Pages and
+  disable the Pages workflow. Check the Google project name before taking
+  cerviai-demo offline in Cloud Run; disable the container workflow if it
+  won't be used. Unpublishing Pages alone leaves the backend running. Review
+  the other demo resources (its Secret Manager secrets, service accounts,
+  and identity pool) separately. Cloud Run deletion does not delete the
+  Neon database. Only delete a database after deciding you no longer need
+  its data; deletion is irreversible. Do not delete a shared cloud project.
+
+TROUBLESHOOTING
+
+  No Run workflow button: Actions must be enabled and the workflow merged
+  into the default branch. Select that branch when running it. The first
+  unchecked container run intentionally skips deployment.
+
+  Pages shows 404 or is missing its Open demo link: Make sure your repo's
+  Pages Source is GitHub Actions, the landing page run succeeded, and your
+  URL includes /Cervi-AI/. Check CERVIAI_APP_URL matches Cloud Run, and run
+  the landing page workflow again after changing it. Do not upload the
+  whole repository to fix the landing page.
+
+  LFS checkout / missing weights: The 134-byte file in Git is a pointer,
+  not the actual checkpoint. Check the owner's LFS quota and that the LFS
+  object exists for the commit. Do not replace it with unrelated weights.
+
+  Python dependency audit failed: Review the advisory IDs in the build
+  log. Update the affected packages on a review branch, keeping PyTorch and
+  torchvision compatible. Do not turn the audit off to force a deployment.
+  Advisory checks cover Python packages, not every OS/image security issue.
+
+  Package push or image import denied: In the package settings, check
+  Manage Actions access for this repo. To import, the exact Image digest
+  must be in the public GHCR package. Do not share a secret to fix a public
+  image pull. If import visibility was just changed, allow time to refresh.
+
+  Cloud Run startup error: Open the failed revision and its Logs. Confirm
+  the runtime account can read its three secret versions. Confirm the app
+  role and both tables were prepared in the same Neon branch, and that you
+  pasted the pooled app-only URL, not the owner URL. The app requires TLS
+  verification and channel binding; do not weaken them to bypass an error.
+  Cloud Run cannot fall back to SQLite. If an IAM grant was just applied,
+  give it a few minutes. Re-running first-deploy.sh creates new versions of
+  the entered credentials; only keep versions you still use or need for
+  rollback. Never send raw logs or screenshots with credentials.
+
+  GitHub auth or permission error: Check the repository IDs, default
+  branch, three Variables, and that the Google project in both scripts
+  matches. If you changed the default branch, run connect-github.sh again
+  with the new branch before deploying. Never create a key file to bypass
+  federation.
+
+  "The form expired": Reload the form and try again. After signing out or
+  signing back in, an old tab's form token is no longer valid.
+
+  Image, heatmap or detailed report missing: Temporary results are lost
+  across Cloud Run instances or after expiry. Resubmit the demo assessment;
+  only saved clinical history and accounts survive. If image analysis
+  times out, try a small file and check the revision's Logs and resource
+  usage before increasing resources or costs. The Compare page is an
+  unfinished feature of this prototype, not a deployment test.

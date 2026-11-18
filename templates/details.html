@@ -64,6 +64,7 @@
         <form class="assess-card"
               action="{{ url_for('predict') }}"
               method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
             <!-- SECTION 1: BASIC INFORMATION -->
             <section class="assess-section">

@@ -1,0 +1,4 @@
+# Keep this matched pair for both local runs and the CPU-only image.
+# PyTorch 2.13.0 includes the fix for GHSA-rrmf-rvhw-rf47.
+torch==2.13.0
+torchvision==0.28.0

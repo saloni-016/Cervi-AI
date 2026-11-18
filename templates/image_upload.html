@@ -509,6 +509,7 @@ font-size: 17px;
                   action="{{ url_for('predict_image') }}"
                   method="POST"
                   enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
                 <div class="upload-zone" id="upload-zone">
 

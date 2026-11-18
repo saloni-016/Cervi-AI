@@ -314,6 +314,7 @@ font-size: 17px;
     <form action="{{ url_for('predict_combined') }}"
           method="POST"
           enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
         <section class="card">
             <h2>01 — Clinical Information</h2>
