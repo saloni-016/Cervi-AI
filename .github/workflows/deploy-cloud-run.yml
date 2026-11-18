@@ -81,6 +81,14 @@ jobs:
           }
           trap cleanup EXIT
           port=$(docker port "$container" 9080/tcp | cut -d: -f2)
+          echo "=== WAITING 30 SECONDS ==="
+          sleep 30
+          
+          echo "=== PROCESSES AFTER WAIT ==="
+          docker top "$container" || true
+          
+          echo "=== LOGS AFTER WAIT ==="
+          docker logs "$container" 2>&1 || true
           echo "=== CONTAINER PROCESSES ==="
           docker top "$container" || true
 
