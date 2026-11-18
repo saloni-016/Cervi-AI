@@ -128,9 +128,18 @@ jobs:
           trap 'docker logout ghcr.io >/dev/null' EXIT
           printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           docker tag cerviai-smoke "$tag"
-          docker push "$tag"
-          image=$(docker image inspect --format '{{index .RepoDigests 0}}' "$tag")
-          [[ "$image" == "${tag%:*}@"* && "${image##*@}" =~ ^sha256:[0-9a-f]{64}$ ]]
+          push_output=$(docker push "$tag" 2>&1)
+          printf '%s\n' "$push_output"
+          
+          digest=$(printf '%s\n' "$push_output" | sed -nE 's/.*digest: (sha256:[0-9a-f]{64}).*/\1/p' | tail -n 1)
+          
+          if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "ERROR: Could not extract the image digest."
+            exit 1
+          fi
+          
+          image="${tag%:*}@${digest}"
+          echo "Verified image: $image"
           printf 'ref=%s\n' "$image" >> "$GITHUB_OUTPUT"
           printf 'Image: `%s`\n\nRepository ID: `%s`\n\nOwner ID: `%s`\n\nBranch: `%s`\n' \
             "$image" "$GITHUB_REPOSITORY_ID" "$OWNER_ID" "$GITHUB_REF_NAME" >> "$GITHUB_STEP_SUMMARY"
