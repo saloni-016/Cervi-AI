@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CerviAI | Sign out</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='signin.css') }}">
+</head>
+<body class="auth-page">
+    <main class="auth-wrapper">
+        <section class="auth-form-section">
+            <div class="auth-form-content">
+                <h1>Sign out of <span>CerviAI</span>?</h1>
+                <p class="auth-subtitle">Your saved clinical score history will still be available the next time you sign in.</p>
+                <form action="{{ url_for('logout') }}" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="auth-button" type="submit">Sign out</button>
+                </form>
+                <div class="switch-auth"><a href="{{ url_for('choose') }}">Back to dashboard</a></div>
+            </div>
+        </section>
+    </main>
+</body>
+</html>

@@ -1,0 +1,18 @@
+# Only runtime files enter the build context: no secrets, SQLite DB, .git,
+# datasets, or previously tracked static/uploads and static/explanations.
+**
+!requirements-base.txt
+!requirements-torch.txt
+!app.py
+!explain_xgboost.py
+!explain_vit.py
+!train_vit.py
+!model.pkl
+!imputer.pkl
+!vit_sipakmed.pth
+!sipakmed_classes.json
+!templates/*.html
+!static/*.css
+!static/chatbot.js
+!static/images/ai_doctor.png
+!static/images/cervical_ai.png

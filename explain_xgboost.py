@@ -38,11 +38,6 @@ def explain_clinical_input(values):
 
     probabilities = model.predict_proba(user_data_imputed)
 
-    print("\n--- Neuronova Model Debug ---")
-    print("Input values:", values)
-    print("Model classes:", model.classes_)
-    print("All class probabilities:", probabilities[0])
-
     # Find the probability for class 1 explicitly
     classes = list(model.classes_)
 
@@ -55,11 +50,6 @@ def explain_clinical_input(values):
     probability = float(probabilities[0][positive_index])
 
     prediction = int(model.classes_[np.argmax(probabilities[0])] == 1)
-
-    print("Positive-class probability:", probability)
-    print("Positive-class score (%):", round(probability * 100, 2))
-    print("Predicted class:", prediction)
-    print("-----------------------------\n")
 
     shap_values = explainer.shap_values(
         user_data_imputed

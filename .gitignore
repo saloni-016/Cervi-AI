@@ -1,4 +1,7 @@
 .env
+.env.*
+!.env.example
+gha-creds-*.json
 *.db
 *.db-shm
 *.db-wal

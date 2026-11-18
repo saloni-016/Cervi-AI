@@ -1,28 +1,30 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+    <meta name="referrer" content="no-referrer">
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
+
     <title>CerviAI | Explainable Cervical Screening</title>
 
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="./static/style.css">
 </head>
 
 <body>
 
 <header class="navbar">
 
-    <a href="/" class="logo">
+    <a href="#home" class="logo">
         <span class="logo-mark">✦</span>
         Cervi<span>AI</span>
     </a>
 
 
     <div class="nav-right">
-        <a href="https://cervi-ai.onrender.com/signin" class="signin">Sign In</a>
-        <a href="https://cervi-ai.onrender.com/signup" class="nav-btn">Sign up</a>
+        <a href="__CERVIAI_APP_URL__/" class="nav-btn">Open demo</a>
     </div>
 
 </header>
@@ -54,8 +56,8 @@
 
         <div class="hero-buttons">
 
-            <a href="https://cervi-ai.onrender.com/signup" class="primary-btn">
-                Get Started
+            <a href="__CERVIAI_APP_URL__/" class="primary-btn">
+                Open demo on Cloud Run
                 <span>→</span>
             </a>
 
@@ -67,7 +69,8 @@
         </div>
 
         <p class="disclaimer">
-            AI-based screening support • Not a medical diagnosis
+            Invitation-only educational demo. Sign-in and assessments open on Cloud Run
+            (<code>run.app</code>), not on this page. Do not enter patient data.
         </p>
 
     </div>
@@ -82,12 +85,11 @@
         <div class="doctor-image-container">
 
             <img
-                src="/static/images/ai_doctor.png"
-                alt="AI Doctor"
+                src="./static/images/ai_doctor.png"
+                alt="Illustration of a doctor reviewing screening results"
                 class="ai-doctor"
             >
-
-
+        </div>
     </div>
 
 </section>
@@ -278,8 +280,8 @@
             image screening support with explainable results.
         </p>
 
-        <a href="https://cervi-ai.onrender.com/signup" class="primary-btn">
-            Get Started
+        <a href="__CERVIAI_APP_URL__/" class="primary-btn">
+            Open demo on Cloud Run
         </a>
 
     </div>

@@ -51,6 +51,7 @@
                 {% endif %}
 
                 <form method="POST" action="{{ url_for('signin') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
                     <div class="input-group">
                         <label for="email">
@@ -73,6 +74,7 @@
 
                         <input
                             type="password"
+                            maxlength="128"
                             id="password"
                             name="password"
                             placeholder="Enter your password"

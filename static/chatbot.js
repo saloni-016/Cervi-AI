@@ -66,7 +66,8 @@ document.addEventListener("DOMContentLoaded", function () {
             const response = await fetch("/clinical-result-chat", {
                 method: "POST",
                 headers: {
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
+                    "X-CSRF-Token": chatWindow.dataset.csrfToken
                 },
                 body: JSON.stringify({
                     question: question,
