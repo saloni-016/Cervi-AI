@@ -79,6 +79,17 @@ jobs:
           }
           trap cleanup EXIT
           port=$(docker port "$container" 9080/tcp | cut -d: -f2)
+          echo "=== CONTAINER PROCESSES ==="
+          docker top "$container" || true
+
+          echo "=== CONTAINER PORTS ==="
+          docker port "$container" || true
+
+          echo "=== CONTAINER DETAILS ==="
+          docker inspect "$container" --format '{{json .NetworkSettings.Ports}}'
+
+          echo "=== HEALTH CHECK RESPONSE ==="
+          curl -v --max-time 10 "http://127.0.0.1:$port/healthz" || true
           base="http://127.0.0.1:$port"
           curl --fail --silent --show-error --retry 8 --retry-connrefused --retry-delay 2 \
             --max-time 8 "$base/healthz" >/dev/null
