@@ -57,16 +57,18 @@ app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
 DEMO_PASSWORD = os.getenv("DEMO_PASSWORD")
-ON_CLOUD_RUN = bool(os.getenv("K_SERVICE"))
+# Railway injects these IDs even before public networking is configured.
+# Keep the legacy marker fail-closed for any remaining Cloud Run instances.
+HOSTED = any(os.getenv(name) for name in ("RAILWAY_PROJECT_ID", "RAILWAY_ENVIRONMENT_ID", "K_SERVICE"))
 USERS_TABLE = "public.users" if DATABASE_URL else "users"
 RESULTS_TABLE = "public.results" if DATABASE_URL else "results"
 
-if ON_CLOUD_RUN and not all((DATABASE_URL, app.secret_key, DEMO_PASSWORD)):
-    raise RuntimeError("Configure DATABASE_URL, SECRET_KEY and DEMO_PASSWORD in Cloud Run.")
+if HOSTED and not all(value and value.strip() for value in (DATABASE_URL, app.secret_key, DEMO_PASSWORD)):
+    raise RuntimeError("Configure DATABASE_URL, SECRET_KEY and DEMO_PASSWORD on the hosting service.")
 
 app.config.update(
     MAX_CONTENT_LENGTH=10 * 1024 * 1024,
-    SESSION_COOKIE_SECURE=ON_CLOUD_RUN,
+    SESSION_COOKIE_SECURE=HOSTED,
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
 )
@@ -125,15 +127,15 @@ def response_security_headers(response):
         response.headers["Cache-Control"] = "private, no-store"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "no-referrer"
-    if ON_CLOUD_RUN:
+    if HOSTED:
         response.headers["Content-Security-Policy"] = (
             "frame-ancestors 'none'; form-action 'self'; base-uri 'none'; object-src 'none'"
         )
     return response
 
 
-# Cloud Run's writable filesystem is temporary and counts toward instance RAM.
-# Keep image results outside /static, and bound space used per worker.
+# Hosted storage is ephemeral. Keep image results outside /static and bound
+# the space used per worker.
 MEDIA_TTL = 60 * 60
 MAX_MEDIA_SETS = 8
 IMAGE_FORMATS = {".bmp": "BMP", ".png": "PNG", ".jpg": "JPEG", ".jpeg": "JPEG"}
@@ -271,7 +273,7 @@ def connect_db():
         from psycopg.conninfo import conninfo_to_dict
 
         options = {"connect_timeout": 15, "prepare_threshold": None}
-        if not ON_CLOUD_RUN:
+        if not HOSTED:
             return psycopg.connect(DATABASE_URL, **options)
         try:
             settings = conninfo_to_dict(DATABASE_URL)
@@ -283,7 +285,7 @@ def connect_db():
             or settings.get("user") != "cerviai_app"
             or not all(settings.get(key) for key in ("dbname", "password"))
         ):
-            raise RuntimeError("Cloud Run requires the pooled Neon URL for the cerviai_app role.")
+            raise RuntimeError("Hosted CerviAI requires the pooled Neon URL for the cerviai_app role.")
         # Select only these connection fields; don't accept TLS or libpq overrides from the URL.
         return psycopg.connect(
             host=host, user="cerviai_app", dbname=settings["dbname"], password=settings["password"],
@@ -307,8 +309,8 @@ def database():
 def init_db():
     with database() as conn:
         if DATABASE_URL:
-            # Cloud runtime isn't a schema owner. Fail startup if provisioning hasn't been done.
-            if ON_CLOUD_RUN:
+            # The runtime isn't a schema owner. Fail startup if provisioning hasn't been done.
+            if HOSTED:
                 elevated = conn.execute("""
                     SELECT has_schema_privilege('public', 'CREATE') OR EXISTS (
                         SELECT 1 FROM pg_roles WHERE rolname = 'neon_superuser' AND pg_has_role(oid, 'MEMBER')

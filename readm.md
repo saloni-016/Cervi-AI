@@ -26,12 +26,12 @@ Cervi-AI/
 ├── requirements.txt           # Local Python dependencies, including shared requirements
 ├── requirements-base.txt      # Shared dependencies, including the PostgreSQL driver
 ├── Dockerfile                 # CPU-only Linux container serving Gunicorn
-├── .github/workflows/         # Manual container/Cloud Run and GitHub Pages workflows
+├── .github/workflows/         # Manual Railway container and GitHub Pages workflows
 ├── deploy/                    # Deployment helpers, Neon schema provisioning, Pages build
 └── instructions.txt           # Step-by-step deployment guide
 ```
 
-The main app serves [`templates/index.html`](templates/index.html) at `/`. [`frontend/index.html`](frontend/index.html) is the static GitHub Pages landing template. After publishing, `https://saloni-016.github.io/Cervi-AI/` links to the configured HTTPS Cloud Run service. It does not render Flask forms, call APIs or use database credentials.
+The main app serves [`templates/index.html`](templates/index.html) at `/`. [`frontend/index.html`](frontend/index.html) is the static GitHub Pages landing template. After publishing, `https://saloni-016.github.io/Cervi-AI/` links to the configured HTTPS Railway service. It does not render Flask forms, call APIs or use database credentials.
 
 ## How an assessment flows through the app
 
@@ -44,7 +44,7 @@ The main app serves [`templates/index.html`](templates/index.html) at `/`. [`fro
 Clinical-only and combined submissions → clinical score summary in PostgreSQL or SQLite → /history
 ```
 
-On startup, [`app.py`](app.py) loads environment variables and clinical model artifacts, initializes a temporary media directory, and calls `init_db()` to check database access. SQLite tables are created locally if needed. For PostgreSQL, [`deploy/prepare_neon.py`](deploy/prepare_neon.py) provisions the tables once with the owner; the runtime receives only a restricted login with read and insert grants. Cloud Run requires that pooled Neon URL with verified TLS, `SECRET_KEY`, and `DEMO_PASSWORD`; it never falls back to SQLite. Signup or sign-in puts the user's email and username in the Flask session. The ViT weights are loaded on the first image inference, not at app startup.
+On startup, [`app.py`](app.py) loads environment variables and clinical model artifacts, checks database access with `init_db()`, and then initializes a temporary media directory. SQLite tables are created locally if needed. For PostgreSQL, [`deploy/prepare_neon.py`](deploy/prepare_neon.py) provisions the tables once with the owner; the runtime receives only a restricted login with read and insert grants. Railway requires that pooled Neon URL with verified TLS and channel binding, `SECRET_KEY`, and `DEMO_PASSWORD`; it never falls back to SQLite. Signup or sign-in puts the user's email and username in the Flask session. The ViT weights are loaded on the first image inference, not at app startup.
 
 ### Clinical assessment
 
@@ -125,11 +125,17 @@ git lfs pull
 
 Start the local server with `python -m flask --app app run` and open <http://127.0.0.1:5000>. For a smoke check, create a test account, submit synthetic clinical inputs, and confirm the result appears in History. With the checkpoint available, use a non-patient demo image you are authorized to use and check that the heatmap renders. Then try the combined flow and confirm the two scores are displayed separately.
 
-## Deploy without Vercel
+## Deploy to Railway with GitHub Actions and Neon
 
-Follow [`instructions.txt`](instructions.txt). The default `github.io` website is a public GitHub Pages landing page; the app opens on `run.app`. GitHub Actions builds the CPU container, audits its Python dependencies, smoke-tests Gunicorn and the model artifacts, and publishes to GHCR. Cloud Run serves it over HTTPS, and Neon Free stores accounts and clinical history. Both workflows are manual and run from the default branch. Cloud Run can incur charges beyond its allowances; verify billing before setup. Removing the repo's Vercel configuration does not disconnect an existing Vercel project.
+Follow [`instructions.txt`](instructions.txt) for the first setup. Deploy a fresh image from the Railway-enabled workflow; older images do not enable hosted safeguards on Railway.
 
-The offline deployment smoke tests can be run with `python -m unittest discover -s tests -v` after installing the app dependencies. They use a temporary database, model stubs and a mock of the hosted connection. They verify the static Pages artifact, form guards, sessions and history. The Actions build separately checks actual model artifacts and the web server before publishing the container.
+1. **GitHub Actions → GHCR.** `Publish CerviAI demo` verifies the Git LFS checkpoint, builds the nonroot CPU image, audits installed Python dependencies, and smoke-tests Gunicorn and the model artifacts. It publishes a distinct tag per build and records the registry digest. Run it on the default branch with deployment off the first time.
+2. **Railway → Neon.** Create a Railway Docker Image service from that tag, add the pooled app-only Neon URL and the two app secrets as Railway service variables, and configure `/healthz`, one replica and HTTPS. Once the service is working, opt in to the Railway deploy job for later releases. It uses an environment-scoped token, deploys that run's tested tag and checks the new deployment and public invitation gate. Railway must be able to pull the GHCR package; don't make it public without confirming redistribution rights. Measure image size and peak inference memory before relying on a small plan; paid usage can incur charges.
+3. **GitHub Pages.** Set the `CERVIAI_APP_URL` repository variable to the generated `https://…up.railway.app` origin and run `Publish CerviAI landing page`. The default `https://saloni-016.github.io/Cervi-AI/` site has no server or secrets. Visitors leave Pages to sign in on the Railway host. No custom domain is required.
+
+The workflows are manual and run from the default branch. A green publish job alone does not prove a live deployment. `/healthz` verifies startup, not full image inference; use synthetic data for the hosted checks in the guide. Removing the repo's Vercel configuration does not disconnect an existing Vercel project.
+
+Run `python -m unittest discover -s tests -v` after installing the app dependencies for offline checks of hosted settings, the Pages artifact, the Railway deployment API flow, sessions, and history. They use stubs, not live Railway or Neon credentials. Actions also loads the real model artifacts before pushing.
 
 ## Offline training and evaluation
 
@@ -148,4 +154,4 @@ Despite its name, `train_vit.py` does not train the ViT; the training pipeline f
 
 - **Use demo data only.** New passwords are hashed, and signed cookies carry session metadata, not full reports. Any legacy plaintext rows still in a local database are unchanged. Clinical text can be sent to Groq if enabled. Files already in Git history are not made private by the deployment allowlists.
 - **Some pages are unfinished.** The comparison handler exists but has no template. `admin.html`, `chat.html`, and `education.html` are not wired to Flask routes and reference a missing `base.html`. The active assistant is the floating widget, not the unused `chat.html` page.
-- **Hosting is for a small invitation-only demo.** Cloud Run holds detailed results and images on a worker, not in durable storage. It can receive unauthenticated requests even though the app denies access. There is no distributed rate limiting. Check CPU inference time and cold-start latency after deploying. This is not a production service for patient data.
+- **Hosting is for a small invitation-only demo.** Railway deployments hold detailed results and images on a worker, not in durable storage. The endpoint can receive unauthenticated requests even though the app requires an invitation. There is no distributed rate limiting. Check CPU inference time and cold-start latency after deploying. This is not a production service for patient data.

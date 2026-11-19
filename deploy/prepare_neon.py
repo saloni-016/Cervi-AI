@@ -1,4 +1,4 @@
-"""One-time Neon setup; run privately in Cloud Shell, not in GitHub Actions."""
+"""One-time Neon setup; run privately in a local terminal, not in GitHub Actions."""
 
 import re
 import secrets
@@ -71,7 +71,7 @@ def pooled_url(settings, password):
 
 def main():
     if not sys.stdin.isatty():
-        sys.exit("Run this script interactively in a private Cloud Shell terminal.")
+        sys.exit("Run this script interactively in a private local terminal.")
     try:
         config = owner_settings(getpass("Paste the direct Neon owner URL (hidden): "))
         print(f"This will create CerviAI tables and a limited login in {config['dbname']} at {config['host']}.")

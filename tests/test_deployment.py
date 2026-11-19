@@ -55,6 +55,8 @@ def load_app(**settings):
         "SECRET_KEY": "session-key-for-offline-test-only",
         "DEMO_PASSWORD": "local-smoke-invitation",
         "K_SERVICE": "",
+        "RAILWAY_PROJECT_ID": "",
+        "RAILWAY_ENVIRONMENT_ID": "",
         "DATABASE_URL": "",
         "GROQ_API_KEY": "",
         **settings,
