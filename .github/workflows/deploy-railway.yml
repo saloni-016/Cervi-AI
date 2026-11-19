@@ -4,15 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       deploy:
-        description: Update the existing Cloud Run service (leave off on the first run)
+        description: Update the existing Railway service (leave off on the first run)
         type: boolean
         default: false
 
 permissions: {}
 
 concurrency:
-  group: cerviai-cloud-run
-  cancel-in-progress: false  
+  group: cerviai-railway
+  cancel-in-progress: false
 
 jobs:
   publish:
@@ -23,7 +23,7 @@ jobs:
       contents: read
       packages: write
     outputs:
-      image: ${{ steps.image.outputs.ref }}
+      image_tag: ${{ steps.image.outputs.tag }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -70,8 +70,6 @@ jobs:
           cleanup() {
             status=$?
             if [ "$status" -ne 0 ]; then
-               echo "=== WAITING 30 SECONDS FOR STARTUP ==="
-                
               echo "=== CONTAINER STATE ==="
               docker inspect "$container" --format 'status={{.State.Status}} exit={{.State.ExitCode}} error={{.State.Error}} oom={{.State.OOMKilled}}' || true
               echo "=== CONTAINER LOGS ==="
@@ -83,10 +81,10 @@ jobs:
           port=$(docker port "$container" 9080/tcp | cut -d: -f2)
           echo "=== WAITING 30 SECONDS ==="
           sleep 30
-          
+
           echo "=== PROCESSES AFTER WAIT ==="
           docker top "$container" || true
-          
+
           echo "=== LOGS AFTER WAIT ==="
           docker logs "$container" 2>&1 || true
           echo "=== CONTAINER PROCESSES ==="
@@ -117,11 +115,17 @@ jobs:
           assert 0 <= score['probability'] <= 100
           get_model()  # Verify the real checkpoint loads with the CPU wheels.
           PY
+      - name: Test hosted configuration and Pages artifact offline
+        run: |
+          docker run --rm --network none \
+            --volume "$GITHUB_WORKSPACE/tests:/app/tests:ro" \
+            --volume "$GITHUB_WORKSPACE/deploy:/app/deploy:ro" \
+            --volume "$GITHUB_WORKSPACE/frontend:/app/frontend:ro" \
+            cerviai-smoke python -m unittest discover -s tests -v
       - name: Publish the verified image
         id: image
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          OWNER_ID: ${{ github.repository_owner_id }}
         run: |
           set -euo pipefail
           tag="ghcr.io/${GITHUB_REPOSITORY,,}:${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
@@ -130,59 +134,60 @@ jobs:
           docker tag cerviai-smoke "$tag"
           push_output=$(docker push "$tag" 2>&1)
           printf '%s\n' "$push_output"
-          
+
           digest=$(printf '%s\n' "$push_output" | sed -nE 's/.*digest: (sha256:[0-9a-f]{64}).*/\1/p' | tail -n 1)
-          
+
           if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
             echo "ERROR: Could not extract the image digest."
             exit 1
           fi
-          
+
           image="${tag%:*}@${digest}"
           echo "Verified image: $image"
-          printf 'ref=%s\n' "$image" >> "$GITHUB_OUTPUT"
-          printf 'Image: `%s`\n\nRepository ID: `%s`\n\nOwner ID: `%s`\n\nBranch: `%s`\n' \
-            "$image" "$GITHUB_REPOSITORY_ID" "$OWNER_ID" "$GITHUB_REF_NAME" >> "$GITHUB_STEP_SUMMARY"
+          printf 'tag=%s\n' "$tag" >> "$GITHUB_OUTPUT"
+          printf 'Image tag: `%s`\n\nRegistry digest reference: `%s`\n\nCommit: `%s`\n' \
+            "$tag" "$image" "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
   deploy:
     if: inputs.deploy
     needs: publish
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    environment:
+      name: railway-production
+      url: ${{ steps.railway.outputs.url }}
     permissions:
       contents: read
-      id-token: write
     steps:
-      - name: Check deployment settings
-        env:
-          PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
-          WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
-          DEPLOYER_SA: ${{ vars.GCP_DEPLOYER_SA }}
-        run: |
-          if [[ -z "$PROJECT_ID" || -z "$WIF_PROVIDER" || -z "$DEPLOYER_SA" ]]; then
-            echo 'Set the three GitHub repository variables in Step 6 of instructions.txt.' >&2
-            exit 1
-          fi
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
           lfs: false
-      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
-        with:
-          project_id: ${{ vars.GCP_PROJECT_ID }}
-          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
-          service_account: ${{ vars.GCP_DEPLOYER_SA }}
-      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
-      - name: Deploy the published image
+          sparse-checkout: deploy
+      - name: Deploy the tested image to Railway and wait for readiness
+        id: railway
         env:
-          IMAGE: ${{ needs.publish.outputs.image }}
-          PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          CERVIAI_IMAGE_TAG: ${{ needs.publish.outputs.image_tag }}
+          CERVIAI_APP_URL: ${{ vars.CERVIAI_APP_URL }}
+          RAILWAY_PROJECT_TOKEN: ${{ secrets.RAILWAY_PROJECT_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+          RAILWAY_ENVIRONMENT_ID: ${{ vars.RAILWAY_ENVIRONMENT_ID }}
+          RAILWAY_SERVICE_ID: ${{ vars.RAILWAY_SERVICE_ID }}
+        run: python3 -u -m deploy.deploy_railway
+      - name: Verify Railway's public HTTPS endpoint and invitation gate
+        env:
+          APP_URL: ${{ steps.railway.outputs.url }}
+          DEPLOYMENT_ID: ${{ steps.railway.outputs.id }}
         run: |
           set -euo pipefail
-          suffix="gha-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          gcloud run services update cerviai-demo --image="$IMAGE" --no-traffic --deploy-health-check \
-            --revision-suffix="$suffix" --project="$PROJECT_ID" --region=us-central1 --quiet
-          gcloud run services update-traffic cerviai-demo --to-revisions="cerviai-demo-$suffix=100" \
-            --project="$PROJECT_ID" --region=us-central1 --quiet
-          url=$(gcloud run services describe cerviai-demo --format='value(status.url)' \
-            --project="$PROJECT_ID" --region=us-central1)
-          printf 'Cloud Run service: %s\n' "$url" >> "$GITHUB_STEP_SUMMARY"
+          options=(--proto '=https' --silent --show-error --retry 5 --retry-connrefused --retry-delay 4 --max-time 15)
+          if [[ "$(curl "${options[@]}" --fail --write-out ':%{http_code}' "$APP_URL/healthz")" != 'ok:200' ]]; then
+            echo 'Railway reported success, but public /healthz did not return 200 ok. Check the domain, port and logs.' >&2
+            exit 1
+          fi
+          status=$(curl "${options[@]}" --output /dev/null --write-out '%{http_code}' "$APP_URL/")
+          if [[ "$status" != 401 ]]; then
+            echo "Expected the invitation gate (HTTP 401), got HTTP $status. Check Railway service settings." >&2
+            exit 1
+          fi
+          printf 'Railway deployment: `%s`\n\nApp: %s/\n\nPublic checks: `/healthz` 200; invitation required at `/`.\n' \
+            "$DEPLOYMENT_ID" "$APP_URL" >> "$GITHUB_STEP_SUMMARY"
