@@ -289,7 +289,7 @@ def connect_db():
         # Select only these connection fields; don't accept TLS or libpq overrides from the URL.
         return psycopg.connect(
             host=host, user="cerviai_app", dbname=settings["dbname"], password=settings["password"],
-            sslmode="verify-full", sslrootcert="system", channel_binding="require", **options,
+            sslmode="verify-full", sslrootcert="/etc/ssl/certs/ca-certificates.crt", channel_binding="require", **options,
         )
     return sqlite3.connect("database.db", timeout=10)
 
