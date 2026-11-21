@@ -63,7 +63,7 @@ class DeployConfigTests(unittest.TestCase):
             self.addCleanup(module._media_directory.cleanup)
             connect.assert_called_once_with(
                 host="ep-example-pooler.us-east-2.aws.neon.tech", user="cerviai_app", dbname="neondb",
-                password="dummy-value", sslmode="verify-full", sslrootcert="system", channel_binding="require",
+                password="dummy-value", sslmode="verify-full", sslrootcert="/etc/ssl/certs/ca-certificates.crt", channel_binding="require",
                 connect_timeout=15, prepare_threshold=None,
             )
         client = module.app.test_client()
